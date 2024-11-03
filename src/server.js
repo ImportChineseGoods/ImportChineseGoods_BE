@@ -4,9 +4,16 @@ const configViewEngine = require('./config/viewEngine');
 const apiRoutes = require('./routes/api');
 const connection = require('./config/database');
 const { getHomepage } = require('./controllers/homeController');
+const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 8888;
+
+//config cors
+app.use(cors({
+    credentials: true,
+    preflightContinue: true,
+}))
 
 //config req.body
 app.use(express.json()) // for json
@@ -23,7 +30,13 @@ webAPI.get("/", getHomepage)
 app.use('/', webAPI);
 app.use('/v1/api/', apiRoutes);
 
-
+  // A simple SELECT query
+  connection.query(
+    'select * from parameters;',
+    function (err, results, fields) {
+      console.log("results = ", results); // results contains rows returned by server
+    }
+  );
 
 (async () => {
     try {
