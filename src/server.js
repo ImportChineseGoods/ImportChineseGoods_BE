@@ -2,9 +2,8 @@ require('dotenv').config();
 const express = require('express'); //commonjs
 const configViewEngine = require('./config/viewEngine');
 const apiRoutes = require('./routes/api');
-const connection = require('./config/database');
-const { getHomepage } = require('./controllers/homeController');
 const cors = require('cors');
+const router = require('./routes/web');
 
 const app = express();
 const port = process.env.PORT || 8888;
@@ -22,25 +21,14 @@ app.use(express.urlencoded({ extended: true })) // for form data
 //config template engine
 configViewEngine(app);
 
-//add
-const webAPI = express.Router();
-webAPI.get("/", getHomepage)
 
 //khai báo route
-app.use('/', webAPI);
+app.use('/', router);
 app.use('/v1/api/', apiRoutes);
 
-  // A simple SELECT query
-  connection.query(
-    'select * from parameters;',
-    function (err, results, fields) {
-      console.log("results = ", results); // results contains rows returned by server
-    }
-  );
 
 (async () => {
     try {
-        //using mongoose
         // await connection();
 
         app.listen(port, () => {

@@ -1,9 +1,7 @@
-const { and } = require('sequelize');
+const { createCustomerService, loginCustomerService } = require("../services/customerService");
 const connection = require('../config/database');
+const moment = require('moment-timezone');
 
-const getHomepage = async (req, res) => {
-    return res.render('homepage.ejs');
-}
 
 const generateNextId = async () => {
     // Lấy `id` lớn nhất hiện tại từ bảng `customers`
@@ -37,35 +35,56 @@ const generateNextId = async () => {
     });
 };
 
-const postCreateUser = async (req, res) => {
-    let { name, email, password } = req.body;
-    console.log(req.body);
 
-    try {
-        // Tạo `id` mới
-        let id = await generateNextId();
+const createCustomer = async(req, res) => {
+    const {name, email, phone, password} = req.body;
+    let id = await generateNextId();
 
-        connection.query(
-            `INSERT INTO customers (id, name, email, password) VALUES (?, ?, ?, ?)`,
-            [id, name, email, password],
-            function (err, result) {
-                if (err) {
-                    console.log(err);
-                    res.send('Create user failed');
-                } else {
-                    res.send('Create user successfully');
-                }
-            }
-        );
-    } catch (error) {
-        console.log(error);
-        res.send('Failed to generate user ID');
+    const now = moment.tz("Asia/Bangkok");
+    const create_at = now.format('YYYY-MM-DD HH:mm:ss');
+    const update_at = create_at;
+
+    const data = {
+        id,
+        name,
+        email,
+        phone,
+        password,
+        create_at,
+        update_at
+    };
+
+    const result = await createCustomerService(data);
+
+    if (result) {
+        console.log(result);
+        return res.status(200).json(result);
+    } else {
+        return res.status(500).json({ message: "Failed to create customer" });
     }
-};
+}
 
+const handleLogin = async(req, res) => {
+    const {email, password} = req.body;
 
+    const data = {
+        email,
+        password
+    };
+
+    const result = await loginCustomerService(data);
+    console.log(result);
+
+    if (result) {
+        console.log(result);
+        return res.status(200).json(result);
+    } else {
+        return res.status(500).json({ message: "Đăng nhập thất bại, hãy thử lại sau" });
+    }
+}
 
 module.exports = {
-    getHomepage,
-    postCreateUser
+    createCustomer,
+    handleLogin,
+
 }
