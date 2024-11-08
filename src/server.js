@@ -13,6 +13,7 @@ app.use(cors({
     credentials: true,
     preflightContinue: true,
 }))
+app.options('*', cors());
 
 //config req.body
 app.use(express.json()) // for json

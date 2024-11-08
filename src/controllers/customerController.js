@@ -1,4 +1,4 @@
-const { createCustomerService, loginCustomerService } = require("../services/customerService");
+const { createCustomerService, loginCustomerService, getAllCustomerService } = require("../services/customerService");
 const connection = require('../config/database');
 const moment = require('moment-timezone');
 
@@ -35,14 +35,13 @@ const generateNextId = async () => {
     });
 };
 
-
 const createCustomer = async(req, res) => {
     const {name, email, phone, password} = req.body;
     let id = await generateNextId();
 
-    const now = moment.tz("Asia/Bangkok");
-    const create_at = now.format('YYYY-MM-DD HH:mm:ss');
-    const update_at = create_at;
+    // const now = moment.tz("Asia/Bangkok");
+    // const create_at = now.format('YYYY-MM-DD HH:mm:ss');
+    // const update_at = create_at;
 
     const data = {
         id,
@@ -50,8 +49,6 @@ const createCustomer = async(req, res) => {
         email,
         phone,
         password,
-        create_at,
-        update_at
     };
 
     const result = await createCustomerService(data);
@@ -60,7 +57,7 @@ const createCustomer = async(req, res) => {
         console.log(result);
         return res.status(200).json(result);
     } else {
-        return res.status(500).json({ message: "Failed to create customer" });
+        return res.status(500).json({ message: "Tạo tài khoản thất bại, hãy thử lại!" });
     }
 }
 
@@ -83,8 +80,39 @@ const handleLogin = async(req, res) => {
     }
 }
 
+const getAllCustomer = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const pageSize = parseInt(req.query.pageSize) || 10;
+
+        const result = await getAllCustomerService(page, pageSize);
+
+        if (!result) {
+            // Nếu result là null, trả về lỗi
+            return res.status(500).json({ message: "Lấy thông tin thất bại, vui lòng thử lại sau" });
+        } else {
+            // Gửi phản hồi thành công
+            return res.status(200).json({
+                data: result.rows,
+                pagination: {
+                    total: result.count,
+                    current: page,
+                    pageSize: pageSize,
+                },
+            });
+        }
+    } catch (error) {
+        // Nếu có lỗi xảy ra trong quá trình xử lý, trả về lỗi
+        console.error(error);
+        return res.status(500).json({ message: "Đã xảy ra lỗi không mong muốn" });
+    }
+};
+
+
+
 module.exports = {
     createCustomer,
     handleLogin,
+    getAllCustomer,
 
 }

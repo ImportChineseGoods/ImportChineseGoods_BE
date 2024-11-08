@@ -1,7 +1,8 @@
 const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = require('../config/sequelize'); // Kết nối từ tệp database.js
+const sequelize = require('../config/sequelize');
+const moment = require('moment-timezone');
 
-const Customer = sequelize.define('Customer', {
+const Customers = sequelize.define('Customer', {
     id: {
         type: DataTypes.STRING,
         primaryKey: true,
@@ -27,7 +28,7 @@ const Customer = sequelize.define('Customer', {
         type: DataTypes.STRING,
         allowNull: false
     },
-    session_token: {
+    access_token: {
         type: DataTypes.STRING,
         allowNull: true
     },
@@ -49,7 +50,7 @@ const Customer = sequelize.define('Customer', {
     },
     create_at: {
         type: DataTypes.DATE,
-        defaultValue: Sequelize.NOW
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
     },
     update_at: {
         type: DataTypes.DATE,
@@ -64,24 +65,32 @@ const Customer = sequelize.define('Customer', {
         type: DataTypes.INTEGER,
         allowNull: true,
         references: {
-            model: 'sales', // Tên bảng hoặc model bạn tham chiếu
+            model: 'employee',
             key: 'id'
         }
     },
     purchase_discount: {
-        type: DataTypes.DECIMAL(3, 2),
+        type: DataTypes.DECIMAL(5, 2),
         defaultValue: 0,
     },
     shipping_discount: {
-        type: DataTypes.DECIMAL(3, 2),
+        type: DataTypes.DECIMAL(5, 2),
         defaultValue: 0,
     },
     note: {
         type: DataTypes.TEXT,
         allowNull: true
-    }
+    },
+    deposit_rate: {
+        type: DataTypes.DECIMAL(5, 2),
+        defaultValue: 70,
+    },
+    accumulation: {
+        type: DataTypes.DECIMAL(15, 0),
+        defaultValue: 0,
+    },
 }, {
     timestamps: false // Bỏ qua trường createdAt và updatedAt mặc định của Sequelize
 });
 
-module.exports = Customer;
+module.exports = Customers;
