@@ -5,7 +5,7 @@ const delay = (req, res, next) => {
             const token = req.headers.authorization.split(' ')[1];
         }
         next();
-    }, 1000); //ms
+    }, 150000); //ms
 }
 
 module.exports = delay;
