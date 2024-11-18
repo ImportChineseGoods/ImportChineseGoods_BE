@@ -1,14 +1,13 @@
-const { createCustomerService, loginCustomerService, getAllCustomerService, updateCustomerService, deleteCustomerService, changePasswordService, getCustomerByIdService, searchCustomerService } = require("../services/customerService");
+const { createEmployeeService, loginEmployeeService, getAllEmployeeService, updateEmployeeService, deleteEmployeeService, changePasswordService, getEmployeeByIdService, searchEmployeeService } = require("../services/employeeService");
 const responseCodes = require('../untils/response_types');
 
-const createCustomer = async (req, res) => {
-    const { name, email, phone, password } = req.body;
-    if (!name || !email || !phone || !password) return res.status(400).json(responseCodes.NOT_ENOUGH);
+const createEmployee = async (req, res) => {
+    const { name, email, username, phone, password, role } = req.body;
+    if (!name || !email || !username || !phone || !password || !role) return res.status(400).json(responseCodes.NOT_ENOUGH);
 
-    const result = await createCustomerService(req.body);
+    const result = await createEmployeeService(req.body);
 
     if (result) {
-        console.log(result);
         return res.status(200).json(result);
     } else {
         return res.status(500).json(result);
@@ -16,10 +15,10 @@ const createCustomer = async (req, res) => {
 }
 
 const handleLogin = async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json(responseCodes.NOT_ENOUGH);
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json(responseCodes.NOT_ENOUGH);
 
-    const result = await loginCustomerService(req.body);
+    const result = await loginEmployeeService(req.body);
 
     if (result) {
         return res.status(200).json(result);
@@ -28,11 +27,11 @@ const handleLogin = async (req, res) => {
     }
 }
 
-const getAllCustomer = async (req, res) => {
+const getAllEmployee = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
 
-    const result = await getAllCustomerService(page, pageSize);
+    const result = await getAllEmployeeService(page, pageSize);
 
     if (result) {
         return res.status(200).json({
@@ -46,10 +45,11 @@ const getAllCustomer = async (req, res) => {
     } else {
         return res.status(500).json(result);
     }
+
 };
 
-const getCustomerById = async (req, res) => {
-    const result = await getCustomerByIdService(req.params.id);
+const getEmployeeById = async (req, res) => {
+    const result = await getEmployeeByIdService(req.params.id);
 
     if (result) {
         return res.status(200).json(result);
@@ -58,8 +58,8 @@ const getCustomerById = async (req, res) => {
     }
 }
 
-const updateCustomer = async (req, res) => {
-    const result = await updateCustomerService(req.params.id, req.body);
+const updateEmployee = async (req, res) => {
+    const result = await updateEmployeeService(req.params.id, req.body);
 
     if (result) {
         return res.status(200).json(result);
@@ -68,8 +68,8 @@ const updateCustomer = async (req, res) => {
     }
 }
 
-const deleteCustomer = async (req, res) => {
-    const result = await deleteCustomerService(req.params.id);
+const deleteEmployee = async (req, res) => {
+    const result = await deleteEmployeeService(req.params.id);
 
     if (result) {
         return res.status(200).json(result);
@@ -91,11 +91,11 @@ const changePassword = async (req, res) => {
     }
 }
 
-const searchCustomer = async (req, res) => {
+const searchEmployee = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
 
-    const result = await searchCustomerService(req.params.keyword, page, pageSize);
+    const result = await searchEmployeeService(req.params.keyword, page, pageSize);
 
     if (result) {
         return res.status(200).json({
@@ -111,12 +111,12 @@ const searchCustomer = async (req, res) => {
     }
 }
 module.exports = {
-    createCustomer,
+    createEmployee,
     handleLogin,
-    getAllCustomer,
-    getCustomerById,
-    updateCustomer,
-    deleteCustomer,
+    getAllEmployee,
+    getEmployeeById,
+    updateEmployee,
+    deleteEmployee,
     changePassword,
-    searchCustomer
+    searchEmployee
 }

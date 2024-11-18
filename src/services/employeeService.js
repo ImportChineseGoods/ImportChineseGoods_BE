@@ -3,82 +3,67 @@ require('dotenv').config();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const sequelize = require('../config/sequelize');
-const Customer = require('../models/customer')(sequelize);
+const Employee = require('../models/employee')(sequelize);
 const responseCodes = require('../untils/response_types');
 const { Op } = require('sequelize');
 
 const saltRounds = 10;
 
-const createCustomerService = async (data) => {
+const createEmployeeService = async (data) => {
     try {
-        const lastCustomer = await Customer.findOne({
-            order: [['id', 'DESC']],
-            attributes: ['id'],
-        });
-
-        let newId = 'A0001';
-
-        if (lastCustomer) {
-            const lastId = lastCustomer.id;
-            const prefix = lastId[0];
-            const number = parseInt(lastId.slice(1));
-
-            if (number < 9999) {
-                const nextNumber = number + 1;
-                newId = `${prefix}${String(nextNumber).padStart(4, '0')}`;
-            } else {
-                const nextPrefix = String.fromCharCode(prefix.charCodeAt(0) + 1);
-                newId = `${nextPrefix}0001`;
-            }
-        }
-
-        const customer = await Customer.findOne({ where: { email: data.email } });
-        if (customer) {
+        const employee = await Employee.findOne({ where: { email: data.email } });
+        if (employee) {
             return responseCodes.EMAIL_EXISTS;
         }
 
-        const customerPhone = await Customer.findOne({ where: { phone: data.phone } });
-        if (customerPhone) {
+        const employeePhone = await Employee.findOne({ where: { phone: data.phone } });
+        if (employeePhone) {
             return responseCodes.PHONE_EXISTS;
+        }
+
+        const employeeUsername = await Employee.findOne({ where: { username: data.username } });
+        if (employeeUsername) {
+            return responseCodes.USERNAME_EXISTS;
         }
 
         const hashPassword = await bcrypt.hash(data.password, saltRounds);
 
-        const result = await Customer.create({
-            id: newId,
+        let result = await Employee.create({
             name: data.name,
             email: data.email,
+            username: data.username,
             password: hashPassword,
             phone: data.phone,
+            role: data.role
         });
-
         return {
             ...responseCodes.REGISTER_SUCCESS,
-            customer: result,
+            employee: result
         };
+
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
 };
 
-const loginCustomerService = async (data) => {
+const loginEmployeeService = async (data) => {
     try {
-        // fetch user by email
-        const customer = await Customer.findOne({ where: { email: data.email } });
-        if (customer) {
+        // fetch user by username
+        const employee = await Employee.findOne({ where: { username: data.username } });
+        if (employee) {
             //compare password
-            const match = await bcrypt.compare(data.password, customer.password);
+            const match = await bcrypt.compare(data.password, employee.password);
             if (!match) {
-                return responseCodes.INVALID_CREDENTIALS;
+                return responseCodes.INVALID_EMPLOYEE;
             }
             else {
                 //create access token
                 const payload = {
-                    id: customer.id,
-                    email: customer.email,
-                    name: customer.name,
-                    role: 'customer',
+                    id: employee.id,
+                    username: employee.username,
+                    name: employee.name,
+                    role: employee.role
                 }
 
                 const access_token = jwt.sign(payload, process.env.JWT_SECRET, {
@@ -88,14 +73,14 @@ const loginCustomerService = async (data) => {
                     ...responseCodes.LOGIN_SUCCESS,
                     access_token,
                     user: {
-                        id: customer.id,
-                        name: customer.name,
-                        email: customer.email,
+                        id: employee.id,
+                        name: employee.name,
+                        username: employee.username,
                     }
                 }
             }
         } else {
-            return responseCodes.INVALID_CREDENTIALS;
+            return responseCodes.INVALID_EMPLOYEE;
         }
 
     } catch (error) {
@@ -104,10 +89,10 @@ const loginCustomerService = async (data) => {
     }
 };
 
-const getAllCustomerService = async (page, pageSize) => { 
+const getAllEmployeeService = async (page, pageSize) => { 
     try {
         const offset = (page - 1) * pageSize;
-        const result = await Customer.findAndCountAll({
+        const result = await Employee.findAndCountAll({
             attributes: { exclude: ['password'] },
             offset: offset,
             limit: pageSize,
@@ -123,22 +108,22 @@ const getAllCustomerService = async (page, pageSize) => {
     }
 };
 
-const updateCustomerService = async (id, data) => {
+const updateEmployeeService = async (id, data) => {
     try {
-        const customer = await Customer.findOne({ where: { id } });
-        if (!customer) {
+        const employee = await Employee.findOne({ where: { id } });
+        if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
-        if (data.email && data.email !== customer.email) {
-            const emailExists = await Customer.findOne({ where: { email: data.email } });
+        if (data.email && data.email !== employee.email) {
+            const emailExists = await Employee.findOne({ where: { email: data.email } });
             if (emailExists) {
                 return responseCodes.EMAIL_EXISTS;
             }
         }
 
-        if (data.phone && data.phone !== customer.phone) {
-            const phoneExists = await Customer.findOne({ where: { phone: data.phone } });
+        if (data.phone && data.phone !== employee.phone) {
+            const phoneExists = await Employee.findOne({ where: { phone: data.phone } });
             if (phoneExists) {
                 return responseCodes.PHONE_EXISTS;
             }
@@ -148,10 +133,10 @@ const updateCustomerService = async (id, data) => {
             return responseCodes.UNPROFITABLE;
         }
 
-        await customer.update(data);
+        await employee.update(data);
         return {
             ...responseCodes.UPDATE_SUCCESS,
-            customer
+            employee
         };
 
     } catch (error) {
@@ -160,14 +145,14 @@ const updateCustomerService = async (id, data) => {
     }
 };
 
-const deleteCustomerService = async (id) => {
+const deleteEmployeeService = async (id) => {
     try {
-        const customer = await Customer.findOne({ where: { id } });
-        if (!customer) {
+        const employee = await Employee.findOne({ where: { id } });
+        if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
-        await customer.update({
+        await employee.update({
             is_active: false
         });
         return responseCodes.DELETE_SUCCESS;
@@ -178,23 +163,23 @@ const deleteCustomerService = async (id) => {
     }
 };
 
-const getCustomerByIdService = async (id) => {
+const getEmployeeByIdService = async (id) => {
     try {
-        const customer = await Customer.findOne({ where: { id } });
-        if (!customer) {
+        const employee = await Employee.findOne({ where: { id } });
+        if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
-        return customer;
+        return employee;
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
 };
 
-const searchCustomerService = async (keyword, page, pageSize) => {
+const searchEmployeeService = async (keyword, page, pageSize) => {
     try {
         const offset = (page - 1) * pageSize;
-        const result = await Customer.findAndCountAll({
+        const result = await Employee.findAndCountAll({
             offset: offset,
             limit: pageSize,
             where: {
@@ -213,18 +198,18 @@ const searchCustomerService = async (keyword, page, pageSize) => {
 
 const changePasswordService = async (id, data) => {
     try {
-        const customer = await Customer.findOne({ where: { id } });
-        if (!customer) {
+        const employee = await Employee.findOne({ where: { id } });
+        if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
-        const match = await bcrypt.compare(data.oldPassword, customer.password);
+        const match = await bcrypt.compare(data.oldPassword, employee.password);
         if (!match) {
             return responseCodes.NO_MATCH_PASSWORD;
         }
 
         const hashPassword = await bcrypt.hash(data.newPassword, saltRounds);
-        await customer.update({
+        await employee.update({
             password: hashPassword
         });
         return responseCodes.CHANGE_PASSWORD_SUCCESS;
@@ -236,12 +221,12 @@ const changePasswordService = async (id, data) => {
 };
 
 module.exports = {
-    createCustomerService,
-    loginCustomerService,
-    getAllCustomerService,
-    updateCustomerService,
-    deleteCustomerService,
-    getCustomerByIdService,
-    searchCustomerService,
+    createEmployeeService,
+    loginEmployeeService,
+    getAllEmployeeService,
+    updateEmployeeService,
+    deleteEmployeeService,
+    getEmployeeByIdService,
+    searchEmployeeService,
     changePasswordService
 }

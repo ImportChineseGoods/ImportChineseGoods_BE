@@ -1,9 +1,8 @@
 require('dotenv').config();
-const express = require('express'); //commonjs
+const express = require('express');
 const configViewEngine = require('./config/viewEngine');
-const apiRoutes = require('./routes/api');
+const router = require('./routes/v1');
 const cors = require('cors');
-const router = require('./routes/web');
 
 const app = express();
 const port = process.env.PORT || 8888;
@@ -24,8 +23,7 @@ configViewEngine(app);
 
 
 //khai báo route
-app.use('/', router);
-app.use('/v1/api/', apiRoutes);
+app.use('/v1/api/', router);
 
 
 (async () => {

@@ -21,6 +21,7 @@ const auth = (req, res, next) => {
                     return res.status(403).json({ message: 'Token hết hạn hoặc không hợp lệ' });
                 } else {
                     req.user = user;
+                    console.log("Check auth: >>>>>>>: ", req.user);
                     next();
                 }
             });
