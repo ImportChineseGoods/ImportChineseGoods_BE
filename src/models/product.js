@@ -1,15 +1,16 @@
 const { Model, DataTypes } = require('sequelize');
+const { options } = require('../routes/v1');
 
 module.exports = (sequelize) => {
     class Product extends Model {
         static associate(models) {
-            Product.belongsTo(models.Shop, {
-                foreignKey: 'shop_id',
-                as: 'shop'
-            });
             Product.belongsTo(models.Order, {
                 foreignKey: 'order_id',
                 as: 'order'
+            });
+            Product.belongsTo(models.Customer, {
+                foreignKey: 'customer_id',
+                as: 'customer'
             });
         }
     }
@@ -48,13 +49,18 @@ module.exports = (sequelize) => {
             type: DataTypes.TEXT,
             allowNull: true
         },
-        shop_id: {
-            type: DataTypes.INTEGER,
+        shop: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+        customer_id: {
+            type: DataTypes.STRING,
             allowNull: true,
             references: {
-                model: 'shops',
+                model: 'customers',
                 key: 'id'
-            }
+            },
+            onDelete: 'CASCADE',
         },
         order_id: {
             type: DataTypes.STRING,
@@ -62,7 +68,8 @@ module.exports = (sequelize) => {
             references: {
                 model: 'orders',
                 key: 'id'
-            }
+            },
+            onDelete: 'CASCADE',
         }
     }, {
         timestamps: true,
@@ -71,6 +78,23 @@ module.exports = (sequelize) => {
         tableName: 'products',
         modelName: 'Product',
         sequelize,
+    });
+
+    Product.afterUpdate(async (product, options) => {
+        const Order = sequelize.models.Order;
+
+        if (product.order_id &&
+            (product._previousDataValues.quantity !== product.quantity || product._previousDataValues.price !== product.price)) {
+            const order = await Order.findOne({
+                where: { id: product.order_id },
+                include: [
+                    { model: Product, as: 'products' },
+                ],
+            });
+            order.commodity_money = order.products.reduce((total, product) => total + product.price * product.quantity, 0);
+
+            await order.save();
+        }
     });
 
     return Product;

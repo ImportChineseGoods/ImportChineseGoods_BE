@@ -25,10 +25,10 @@ configViewEngine(app);
 //khai báo route
 app.use('/v1/api/', router);
 
+require('./setup/setupDatabase')();
 
 (async () => {
     try {
-        // await connection();
 
         app.listen(port, () => {
             console.log(`Backend Nodejs App listening on port ${port}`)

@@ -19,7 +19,7 @@ module.exports = (sequelize) => {
                 foreignKey: 'consignment_id',
                 as: 'complaints'
             });
-            Consignment.hasMany(models.OrderHistory, {
+            Consignment.hasMany(models.History, {
                 foreignKey: 'consignment_id',
                 as: 'histories'
             })
@@ -41,7 +41,8 @@ module.exports = (sequelize) => {
             references: {
                 model: 'customers',
                 key: 'id'
-            }
+            },
+            onDelete: 'RESTRICT',
         },
         status: {
             type: DataTypes.ENUM(
@@ -56,39 +57,44 @@ module.exports = (sequelize) => {
         },
         shipping_fee: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: false,
+            defaultValue: 0
         },
         incurred_fee: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: false,
+            defaultValue: 0
         },
         weight: {
             type: DataTypes.DECIMAL(10, 2),
-            allowNull: true
+            allowNull: true,
+            defaultValue: 0
         },
         weight_fee: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: true,
         },
         original_weight_fee: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: true,
         },
         shipping_discount: {
-            type: DataTypes.DECIMAL(3, 2),
-            allowNull: true
+            type: DataTypes.DECIMAL(5, 2),
+            allowNull: true,
+            defaultValue: 0
         },
         total_amount: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: true,
         },
         amount_paid: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: false,
+            defaultValue: 0
         },
         outstanding_amount: {
             type: DataTypes.DECIMAL(15, 0),
-            allowNull: true
+            allowNull: true,
         },
         note: {
             type: DataTypes.TEXT,
@@ -100,7 +106,8 @@ module.exports = (sequelize) => {
             references: {
                 model: 'warehouses',
                 key: 'id'
-            }
+            },
+            onDelete: 'SET NULL',
         },
         delivery_id: {
             type: DataTypes.INTEGER,
@@ -108,7 +115,8 @@ module.exports = (sequelize) => {
             references: {
                 model: 'delivery_notes',
                 key: 'id'
-            }
+            },
+            onDelete: 'SET NULL',
         }
     }, {
         timestamps: true,
@@ -116,7 +124,68 @@ module.exports = (sequelize) => {
         updatedAt: 'update_at',
         tableName: 'consignments',
         modelName: 'Consignment',
-        sequelize,  
+        sequelize,
+    });
+
+    Consignment.beforeCreate(async (consignment, options) => {
+        const Parameter = sequelize.models.Parameter;
+        const Customer = sequelize.models.Customer;
+
+        const weightFeeParameter = await Parameter.findOne({ where: { type: 'weight_fee' } });
+        const originalWeightFeeParameter = await Parameter.findOne({ where: { type: 'original_weight_fee' } });
+        consignment.weight_fee = weightFeeParameter.value;
+        consignment.original_weight_fee = originalWeightFeeParameter.value;
+
+        const customer = await Customer.findOne({ where: { id: consignment.customer_id } });
+        consignment.shipping_discount = customer.shipping_discount;
+
+        consignment.shipping_fee = consignment.weight * consignment.weight_fee;
+        consignment.total_amount = consignment.shipping_fee * (1 - consignment.shipping_discount / 100)  + consignment.incurred_fee;
+        consignment.outstanding_amount = consignment.total_amount - consignment.amount_paid;
+    });
+
+    Consignment.afterCreate(async (consignment, options) => {
+        const History = sequelize.models.History;
+        await History.create({
+            consignment_id: consignment.id,
+            status: consignment.status,
+        }, { transaction: options.transaction });
+    });
+
+    Consignment.beforeUpdate(async (consignment, options) => {
+        consignment.shipping_fee = consignment.weight * consignment.weight_fee;
+        consignment.total_amount = consignment.shipping_fee * (1 - consignment.shipping_discount / 100)  + consignment.incurred_fee;
+        consignment.outstanding_amount = consignment.total_amount - consignment.amount_paid;
+    });
+
+    Consignment.afterUpdate(async (consignment, options) => {
+        const History = sequelize.models.History;
+        const DeliveryNote = sequelize.models.DeliveryNote;
+
+        if (consignment._previousDataValues.status !== consignment.status) {
+            const employeeId = options?.user.id || null;
+
+            await History.create({
+                consignment_id: consignment.id,
+                status: consignment.status,
+                employee_id: employeeId,
+            });
+        }
+
+        if (consignment.delivery_id && consignment._previousDataValues.outstanding_amount !== consignment.outstanding_amount) {
+            const delivery = await DeliveryNote.findOne({
+                where: { id: consignment.delivery_id },
+                include: [
+                    { model: Consignment, as: 'consignments' },
+                ],
+                transaction,
+            });
+            delivery.total_amount = delivery.consignments.reduce((acc, cur) => acc + cur.total_amount, 0) + delivery.incurred_fee;
+            delivery.amount_paid = delivery.consignments.reduce((acc, cur) => acc + cur.amount_paid, 0);
+            delivery.outstanding_amount = delivery.total_amount - delivery.amount_paid;
+
+            await delivery.save({ transaction: options.transaction });
+        }
     });
 
     return Consignment;

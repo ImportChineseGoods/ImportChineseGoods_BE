@@ -7,10 +7,6 @@ module.exports = (sequelize) => {
                 foreignKey: 'sales_id',
                 as: 'sales',
             });
-            Customer.hasMany(models.Shop, {
-                foreignKey: 'customer_id',
-                as: 'shops'
-            });
             Customer.hasMany(models.Transaction, {
                 foreignKey: 'customer_id',
                 as: 'transactions'
@@ -31,6 +27,11 @@ module.exports = (sequelize) => {
                 foreignKey: 'customer_id',
                 as: 'complaints'
             });
+
+            Customer.hasMany(models.Products, {
+                foreignKey: 'customer_id',
+                as: 'products'
+            })
         }
     }
 
@@ -76,7 +77,8 @@ module.exports = (sequelize) => {
             references: {
                 model: 'employees',
                 key: 'id'
-            }
+            },
+            onDelete: 'SET NULL'
         },
         purchase_discount: {
             type: DataTypes.DECIMAL(5, 2),
@@ -98,6 +100,10 @@ module.exports = (sequelize) => {
             type: DataTypes.DECIMAL(15, 0),
             defaultValue: 0,
         },
+        avatar: {
+            type: DataTypes.STRING,
+            allowNull: true
+        }
     }, {
         sequelize,
         timestamps: true,

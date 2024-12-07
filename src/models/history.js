@@ -1,31 +1,41 @@
 const { Model, DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-    class OrderHistory extends Model {
+    class History extends Model {
         static associate(models) {
-            OrderHistory.belongsTo(models.Order, {
+            History.belongsTo(models.Order, {
                 foreignKey: 'order_id',
                 as: 'order'
             });
 
-            OrderHistory.belongsTo(models.Consignment, {
+            History.belongsTo(models.Consignment, {
                 foreignKey: 'consignment_id',
                 as: 'consignment'
             });
 
-            OrderHistory.belongsTo(models.DeliveryNote, {
+            History.belongsTo(models.DeliveryNote, {
                 foreignKey: 'delivery_id',
                 as: 'delivery'
             });
 
-            OrderHistory.belongsTo(models.Employee, {
+            History.belongsTo(models.Complaint, {
+                foreignKey: 'complaint_id',
+                as: 'complaint'
+            });
+
+            History.belongsTo(models.Employee, {
                 foreignKey: 'employee_id',
                 as: 'employee'
+            });
+
+            History.belongsTo(models.AnonymousConsignment, {
+                foreignKey: 'anonymous_id',
+                as: 'anonymous'
             });
         };
     }
 
-    OrderHistory.init({
+    History.init({
         id: {
             type: DataTypes.INTEGER,
             primaryKey: true,
@@ -34,10 +44,11 @@ module.exports = (sequelize) => {
         order_id: {
             type: DataTypes.STRING,
             references: {
-                model: Order,
+                model: 'orders',
                 key: 'id'
             },
             allowNull: true,
+            onDelete: 'CASCADE',
         },
         consignment_id: {
             type: DataTypes.STRING,
@@ -46,6 +57,7 @@ module.exports = (sequelize) => {
                 key: 'id'
             },
             allowNull: true,
+            onDelete: 'CASCADE',
         },
         delivery_id: {
             type: DataTypes.INTEGER,
@@ -54,6 +66,7 @@ module.exports = (sequelize) => {
                 key: 'id'
             },
             allowNull: true,
+            onDelete: 'CASCADE',
         },
         employee_id: {
             type: DataTypes.INTEGER,
@@ -62,6 +75,25 @@ module.exports = (sequelize) => {
                 key: 'id'
             },
             allowNull: true,
+            onDelete: 'SET NULL',
+        },
+        complaint_id: {
+            type: DataTypes.INTEGER,
+            references: {
+                model: 'complaints',
+                key: 'id'
+            },
+            allowNull: true,
+            onDelete: 'CASCADE',
+        },
+        anonymous_id: {
+            type: DataTypes.INTEGER,
+            references: {
+                model: 'anonymous_consignments',
+                key: 'id'
+            },
+            allowNull: true,
+            onDelete: 'CASCADE',
         },
         status: {
             type: DataTypes.ENUM(
@@ -74,7 +106,12 @@ module.exports = (sequelize) => {
                 'vietnam_warehouse_received',
                 'waiting_export',
                 'exported',
-                'cancelled'
+
+                'pending',
+                'processing',
+                'completed',
+
+                'cancelled',
             ),
             allowNull: false
         }
@@ -82,10 +119,10 @@ module.exports = (sequelize) => {
         timestamps: true,
         createdAt: 'create_at',
         updatedAt: 'update_at',
-        tableName: 'order_histories',
-        modelName: 'OrderHistory',
+        tableName: 'histories',
+        modelName: 'History',
         sequelize,
     });
 
-    return OrderHistory;
+    return History;
 }

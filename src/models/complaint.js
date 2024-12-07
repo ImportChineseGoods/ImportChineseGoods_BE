@@ -17,6 +17,10 @@ module.exports = (sequelize) => {
                 foreignKey: 'employee_id',
                 as: 'employee'
             });
+            Complaint.belongsTo(models.Customer, {
+                foreignKey: 'customer_id',
+                as: 'customer'
+            });
         }
     }
 
@@ -30,7 +34,7 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
             references: {
-                model: Order,
+                model: 'orders',
                 key: 'id'
             }
         },
@@ -38,9 +42,18 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
             references: {
-                model: Consignment,
+                model: 'consignments',
                 key: 'id'
-            }
+            },
+        },
+        customer_id: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            references: {
+                model: 'customers',
+                key: 'id'
+            },
+            onDelete: 'CASCADE',
         },
         image_url: {
             type: DataTypes.TEXT,
@@ -54,9 +67,10 @@ module.exports = (sequelize) => {
             type: DataTypes.INTEGER,
             allowNull: true,
             references: {
-                model: Employee,
+                model: 'employees',
                 key: 'id'
-            }
+            },
+            onDelete: 'SET NULL',
         },
         type: {
             type: DataTypes.ENUM(
@@ -74,7 +88,7 @@ module.exports = (sequelize) => {
         status: {
             type: DataTypes.ENUM(
                 'pending',
-                'in progress',
+                'processing',
                 'completed',
                 'cancelled'
             ),
@@ -90,9 +104,29 @@ module.exports = (sequelize) => {
         updatedAt: 'update_at',
         tableName: 'complaints',
         modelName: 'Complaint',
-        sequelize,   
+        sequelize,
     });
 
+    Complaint.afterCreate(async (complaint, options) => {
+        const History = sequelize.models.History;
+        await History.create({
+            complaint_id: complaint.id,
+            status: complaint.status,
+        });
+    });
+
+    Complaint.afterUpdate(async (complaint, options) => {
+        const History = sequelize.models.History;
+        if (complaint._previousDataValues.status !== complaint.status) {
+            const employeeId = options.user.id || complaint.employee_id || null;
+
+            await History.create({
+                complaint_id: complaint.id,
+                status: complaint.status,
+                employee_id: employeeId,
+            });
+        }
+    });
 
     return Complaint;
 }

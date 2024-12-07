@@ -1,4 +1,5 @@
 const { Model, DataTypes } = require('sequelize');
+const employee = require('./employee');
 
 module.exports = (sequelize) => {
     class DeliveryNote extends Model {
@@ -14,6 +15,11 @@ module.exports = (sequelize) => {
             DeliveryNote.hasMany(models.Consignment, {
                 foreignKey: 'delivery_id',
                 as: 'consignments'
+            });
+
+            DeliveryNote.hasMany(models.History, {
+                foreignKey: 'delivery_id',
+                as: 'histories'
             });
         }
     }
@@ -67,6 +73,10 @@ module.exports = (sequelize) => {
         type: {
             type: DataTypes.ENUM('order', 'consignment'),
             allowNull: false
+        },
+        number_of_order: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
         }
     }, {
         timestamps: true,
@@ -77,6 +87,29 @@ module.exports = (sequelize) => {
         sequelize, 
     });
 
+    DeliveryNote.afterCreate(async (deliveryNote, options) => {
+        const History = sequelize.models.History;
+        await History.create({
+            delivery_id: deliveryNote.id,
+            status: deliveryNote.status,
+            employee_id: options.user?.id || null
+        }, { transaction: options.transaction });
+    });
 
+    DeliveryNote.beforeUpdate(async (deliveryNote, options) => {
+        order.outstanding_amount = order.total_amount - order.amount_paid;
+        if (deliveryNote._previousDataValues.status !== deliveryNote.status) {
+            const employeeId = options.user?.id || null;
+    
+            await History.create(
+                {
+                    order_id: deliveryNote.id,
+                    status: deliveryNote.status,
+                    employee_id: employeeId,
+                },
+                { transaction: options.transaction }
+            );
+        }
+    });
     return DeliveryNote;
 }

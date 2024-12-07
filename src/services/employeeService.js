@@ -91,17 +91,20 @@ const loginEmployeeService = async (data) => {
 
 const getAllEmployeeService = async (page, pageSize) => { 
     try {
-        const offset = (page - 1) * pageSize;
         const result = await Employee.findAndCountAll({
             attributes: { exclude: ['password'] },
-            offset: offset,
+            offset: (page - 1) * pageSize,
             limit: pageSize,
             where: {
                 is_active: true
-            }
+            },
+            order: [['update_at', 'DESC']],
         });
 
-        return result;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            result
+        };
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
@@ -113,24 +116,6 @@ const updateEmployeeService = async (id, data) => {
         const employee = await Employee.findOne({ where: { id } });
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
-        }
-
-        if (data.email && data.email !== employee.email) {
-            const emailExists = await Employee.findOne({ where: { email: data.email } });
-            if (emailExists) {
-                return responseCodes.EMAIL_EXISTS;
-            }
-        }
-
-        if (data.phone && data.phone !== employee.phone) {
-            const phoneExists = await Employee.findOne({ where: { phone: data.phone } });
-            if (phoneExists) {
-                return responseCodes.PHONE_EXISTS;
-            }
-        }
-
-        if (data.password) {
-            return responseCodes.UNPROFITABLE;
         }
 
         await employee.update(data);
@@ -169,7 +154,10 @@ const getEmployeeByIdService = async (id) => {
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
-        return employee;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            employee
+        };
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
@@ -178,9 +166,8 @@ const getEmployeeByIdService = async (id) => {
 
 const searchEmployeeService = async (keyword, page, pageSize) => {
     try {
-        const offset = (page - 1) * pageSize;
         const result = await Employee.findAndCountAll({
-            offset: offset,
+            offset: (page - 1) * pageSize,
             limit: pageSize,
             where: {
                 [Op.or]: [
@@ -189,7 +176,10 @@ const searchEmployeeService = async (keyword, page, pageSize) => {
                 ]
             }
         });
-        return result;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            result
+        };
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
@@ -220,6 +210,39 @@ const changePasswordService = async (id, data) => {
     }
 };
 
+const editInfoService = async (data) => {
+    try {
+        const employee = await Employee.findOne({ where: { id: data.id } });
+        if (!employee) {
+            return responseCodes.ACCOUNT_NOT_FOUND;
+        }
+
+        if (data.email && data.email !== employee.email) {
+            const emailExists = await Employee.findOne({ where: { email: data.email } });
+            if (emailExists) {
+                return responseCodes.EMAIL_EXISTS;
+            }
+        }
+
+        if (data.phone && data.phone !== employee.phone) {
+            const phoneExists = await Employee.findOne({ where: { phone: data.phone } });
+            if (phoneExists) {
+                return responseCodes.PHONE_EXISTS;
+            }
+        }
+
+        await employee.update(data);
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            employee
+        };
+
+    } catch (error) {
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+
 module.exports = {
     createEmployeeService,
     loginEmployeeService,
@@ -228,5 +251,6 @@ module.exports = {
     deleteEmployeeService,
     getEmployeeByIdService,
     searchEmployeeService,
-    changePasswordService
+    changePasswordService,
+    editInfoService,
 }

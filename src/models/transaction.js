@@ -21,6 +21,24 @@ module.exports = (sequelize) => {
             primaryKey: true,
             autoIncrement: true,
         },
+        customer_id: {
+            type: DataTypes.STRING,
+            allowNull: true,
+            references: {
+                model: 'customers',
+                key: 'id'
+            },
+            onDelete: 'SET NULL',
+        },
+        employee_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: 'employees',
+                key: 'id'
+            },
+            onDelete: 'SET NULL',
+        },
         value: {
             type: DataTypes.DECIMAL(15, 0),
             allowNull: false
@@ -30,7 +48,7 @@ module.exports = (sequelize) => {
             allowNull: false
         },
         type: {
-            type: DataTypes.ENUM('withdrawal', 'deposit', 'payment', 'refund'),
+            type: DataTypes.ENUM('withdraw', 'deposit', 'payment', 'refund'),
             allowNull: false
         },
         content: {
@@ -38,7 +56,7 @@ module.exports = (sequelize) => {
             allowNull: true
         },
         status: {
-            type: DataTypes.ENUM('in progress', 'completed', 'cancelled'),
+            type: DataTypes.ENUM('processing', 'completed', 'cancelled'),
             allowNull: false
         },
     }, {

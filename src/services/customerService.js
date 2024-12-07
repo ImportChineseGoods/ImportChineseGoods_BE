@@ -24,8 +24,7 @@ const createCustomerService = async (data) => {
             const number = parseInt(lastId.slice(1));
 
             if (number < 9999) {
-                const nextNumber = number + 1;
-                newId = `${prefix}${String(nextNumber).padStart(4, '0')}`;
+                newId = `${prefix}${String(number + 1).padStart(4, '0')}`;
             } else {
                 const nextPrefix = String.fromCharCode(prefix.charCodeAt(0) + 1);
                 newId = `${nextPrefix}0001`;
@@ -91,6 +90,7 @@ const loginCustomerService = async (data) => {
                         id: customer.id,
                         name: customer.name,
                         email: customer.email,
+                        avatar: customer.avatar,
                     }
                 }
             }
@@ -106,17 +106,20 @@ const loginCustomerService = async (data) => {
 
 const getAllCustomerService = async (page, pageSize) => { 
     try {
-        const offset = (page - 1) * pageSize;
         const result = await Customer.findAndCountAll({
             attributes: { exclude: ['password'] },
-            offset: offset,
+            offset: (page - 1) * pageSize,
             limit: pageSize,
             where: {
                 is_active: true
-            }
+            },
+            order: [['update_at', 'DESC']],
         });
 
-        return result;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            result
+        }
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
@@ -128,24 +131,6 @@ const updateCustomerService = async (id, data) => {
         const customer = await Customer.findOne({ where: { id } });
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
-        }
-
-        if (data.email && data.email !== customer.email) {
-            const emailExists = await Customer.findOne({ where: { email: data.email } });
-            if (emailExists) {
-                return responseCodes.EMAIL_EXISTS;
-            }
-        }
-
-        if (data.phone && data.phone !== customer.phone) {
-            const phoneExists = await Customer.findOne({ where: { phone: data.phone } });
-            if (phoneExists) {
-                return responseCodes.PHONE_EXISTS;
-            }
-        }
-
-        if (data.password) {
-            return responseCodes.UNPROFITABLE;
         }
 
         await customer.update(data);
@@ -184,7 +169,10 @@ const getCustomerByIdService = async (id) => {
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
-        return customer;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            customer
+        }
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
@@ -193,23 +181,59 @@ const getCustomerByIdService = async (id) => {
 
 const searchCustomerService = async (keyword, page, pageSize) => {
     try {
-        const offset = (page - 1) * pageSize;
         const result = await Customer.findAndCountAll({
-            offset: offset,
+            offset: (page - 1) * pageSize,
             limit: pageSize,
             where: {
                 [Op.or]: [
+                    { id: { [Op.like]: `%${keyword}%` } },
                     { email: { [Op.like]: `%${keyword}%` } },
                     { phone: { [Op.like]: `%${keyword}%` } },
                 ]
             }
         });
-        return result;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            result
+        }
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
 };
+
+const editInfoService = async (user, data) => {
+    try {
+        const customer = await Customer.findOne({ where: { id: user.id } });
+        if (!customer) {
+            return responseCodes.ACCOUNT_NOT_FOUND;
+        }
+
+        if (data.email && data.email !== customer.email) {
+            const emailExists = await Customer.findOne({ where: { email: data.email } });
+            if (emailExists) {
+                return responseCodes.EMAIL_EXISTS;
+            }
+        }
+
+        if (data.phone && data.phone !== customer.phone) {
+            const phoneExists = await Customer.findOne({ where: { phone: data.phone } });
+            if (phoneExists) {
+                return responseCodes.PHONE_EXISTS;
+            }
+        }
+
+        await customer.update(data);
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            customer
+        };
+
+    } catch (error) {
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
 
 const changePasswordService = async (id, data) => {
     try {
@@ -243,5 +267,6 @@ module.exports = {
     deleteCustomerService,
     getCustomerByIdService,
     searchCustomerService,
+    editInfoService,
     changePasswordService
 }

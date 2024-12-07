@@ -29,9 +29,10 @@ module.exports = (sequelize) => {
             type: DataTypes.STRING,
             allowNull: true,
             references: {
-                model: Order,
+                model: 'orders',
                 key: 'id'
-            }
+            },
+            onDelete: 'CASCADE',
         },
         consignment_id: {
             type: DataTypes.STRING,
@@ -39,15 +40,17 @@ module.exports = (sequelize) => {
             references: {
                 model: 'consignments',
                 key: 'id'
-            }
+            },
+            onDelete: 'CASCADE',
         },
         anonymous_id: {
-            type: DataTypes.STRING,
+            type: DataTypes.INTEGER,
             allowNull: true,
             references: {
                 model: 'anonymous_consignments',
                 key: 'id'
-            }
+            },
+            onDelete: 'CASCADE',
         },
         status: {
             type: DataTypes.ENUM(
@@ -58,8 +61,13 @@ module.exports = (sequelize) => {
                 'exported',
                 'cancelled'
             ),
-            allowNull: false
+            allowNull: false,
+            defaultValue: 'shop_shipping'
         },
+        weight: {
+            type: DataTypes.FLOAT,
+            allowNull: true,
+        }, 
     }, {
         timestamps: true,
         createdAt: 'create_at',
