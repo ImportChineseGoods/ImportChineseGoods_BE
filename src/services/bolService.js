@@ -1,12 +1,12 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const AnonymousConsignment = require('../models/anonymousConsignment')(sequelize);
-const BOL = require('../models/bol')(sequelize);
-const Consignment = require('../models/consignment')(sequelize);
-const Order = require('../models/order')(sequelize);
-const Customer = require('../models/customer')(sequelize);
-const History = require('../models/history')(sequelize);
+const sequelize = require('../config');
+const AnonymousConsignment = sequelize.models.AnonymousConsignment;
+const BOL = sequelize.models.BOL;
+const Consignment = sequelize.models.Consignment;
+const Order = sequelize.models.Order;
+const Customer = sequelize.models.Customer;
+const History = sequelize.models.History;
 const responseCodes = require('../untils/response_types');
 const { createConsignmentService } = require('./consignmentService');
 
@@ -94,7 +94,7 @@ const assignCustomerService = async (user, customerId, data) => {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
-        for (const bol of bols) {
+        for (const bol of data.bols) {
             const consignment = await createConsignmentService(customerId, {
                 status: bol.status,
                 weight: bol.weight,
@@ -127,7 +127,7 @@ const assignCustomerService = async (user, customerId, data) => {
 
 const getBOLsByStatusService = async (status, page, pageSize) => {
     try {
-        const bols = await BOL.findAll({
+        const bols = await BOL.findAndCountAll({
             where: { status: status },
             include: [
                 { model: Order, as: 'order' },

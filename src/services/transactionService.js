@@ -1,10 +1,11 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Transaction = require('../models/transaction')(sequelize);
-const Consignment = require('../models/consignment')(sequelize);
-const Order = require('../models/order')(sequelize);
-const Customer = require('../models/customer')(sequelize);
+const sequelize = require('../config');
+const Transaction = sequelize.models.Transaction;
+const Consignment = sequelize.models.Consignment;
+const Order = sequelize.models.Order;
+const Customer = sequelize.models.Customer;
+const Employee = sequelize.models.Employee;
 const responseCodes = require('../untils/response_types');
 const { Op } = require('sequelize');
 
@@ -12,17 +13,24 @@ const withdrawTransactionService = async (user, data) => {
     const dbTransaction = await sequelize.transaction();
     try {
         const customer = await Customer.findOne({ where: { id: user.id } }, { dbTransaction });
-        data.balance_after = customer.balance - data.value;
+
+        const customerBalance = parseInt(customer.balance, 10);
+        const transactionValue = parseInt(data.value, 10);
+
+        data.balance_after = parseInt(customerBalance - transactionValue, 10);
         if (data.balance_after < 0) return responseCodes.BALANCE_NOT_ENOUGH;
+
         data.customer_id = user.id;
         data.type = 'withdraw';
         data.status = 'processing';
-        data.content = 'Rút tiền từ tài khoản' + user.id;
+        data.content = `KH ${user.id} rút tiền về tài khoản ${data.bank_account}, ngân hàng ${data.bank}, chủ sở hữu ${data.bank_owner}, note: ${data.note}`;
 
         await customer.update({ balance: data.balance_after }, { dbTransaction });
+        
         const result = await Transaction.create(data, { dbTransaction });
 
         await dbTransaction.commit();
+        
         return {
             ...responseCodes.CREATE_TRANSACTION_SUCCESS,
             transaction: result,
@@ -39,11 +47,11 @@ const createTransactionService = async (user, data) => {
     try {
         const customer = await Customer.findOne({ where: { id: data.customer_id } }, { dbTransaction });
         if (data.type === 'deposit') {
-            data.balance_after = user.balance + data.value;
+            data.balance_after = parseInt(customer.balance, 10) + parseInt(data.value, 10);
         }
 
         if (data.type === 'withdraw') {
-            data.balance_after = customer.balance - data.value;
+            data.balance_after = parseInt(customer.balance, 10) - parseInt(data.value, 10);
             if (data.balance_after < 0) return responseCodes.BALANCE_NOT_ENOUGH;
         }
         
@@ -69,16 +77,16 @@ const depositTransactionService = async (user, data) => {
     const dbTransaction = await sequelize.transaction();
     try {
         const customer = await Customer.findOne({ where: { id: user.id } }, { dbTransaction });
-        const order = await Order.findOne({ where: { id: data.order_id } }, { dbTransaction });
+        const order = await Order.findOne({ where: { id: data.order_id, customer_id: user.id } }, { dbTransaction });
 
-        const deposit = customer.deposit_rate / 100 * order.commodity_money * order.applicable_rate;
+        const deposit = Math.round(customer.deposit_rate / 100 * order.commodity_money * order.applicable_rate - order.amount_paid);
         if (data.value !== deposit) return responseCodes.INVALID;
 
-        data.balance_after = customer.balance - data.value;
-        if (data.balance_after < 0) return responseCodes.BALANCE_NOT_ENOUGH;
+        if (customer.balance < data.value) return responseCodes.BALANCE_NOT_ENOUGH;
+        else data.balance_after = parseInt(customer.balance, 10) - parseInt(data.value, 10);
         data.customer_id = user.id;
         data.type = 'payment';
-        data.content = 'Đặt cọc đơn hàng ' + order.id
+        data.content = 'Đặt cọc đơn hàng ' + order.id;
         
         data.status = 'completed';
 
@@ -101,7 +109,7 @@ const depositTransactionService = async (user, data) => {
 const paymentTransactionService = async (data, dbTransaction) => {
     try {
         const customer = await Customer.findOne({ where: { id: data.customer_id } }, { dbTransaction });
-        data.balance_after = customer.balance - data.value;
+        data.balance_after = parseInt(customer.balance, 10) - parseInt(data.value, 10); // Đảm bảo balance là số nguyên
         data.type = 'payment';
         data.status = 'completed';
 
@@ -117,16 +125,16 @@ const paymentTransactionService = async (data, dbTransaction) => {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
-
 }
 
 const refundTransactionService = async (data, dbTransaction) => {
     try {
         const customer = await Customer.findOne({ where: { id: data.customer_id } }, { dbTransaction });
-        data.balance_after = customer.balance + data.value;
+        data.balance_after = parseInt(customer.balance, 10) + parseInt(data.value, 10); // Đảm bảo balance là số nguyên
         data.status = 'completed';
 
         const result = await Transaction.create(data, { dbTransaction });
+        await dbTransaction.commit();
         return responseCodes.CREATE_TRANSACTION_SUCCESS;
     } catch (error) {
         await dbTransaction.rollback();
@@ -187,33 +195,6 @@ const getTransactionsByStatusService = async (status, page, pageSize) => {
     }
 };
 
-const searchTransactionService = async (keyword, page, pageSize) => {
-    try {
-        const transactions = await Transaction.findAndCountAll({
-            where: {
-                transaction_code: {
-                    [Op.like]: `%${keyword}%`,
-                },
-            },
-            offset: (page - 1) * pageSize,
-            limit: pageSize,
-            include: [
-                { model: Order, as: 'order' },
-                { model: Consignment, as: 'consignment' },
-                { model: AnonymousConsignment, as: 'anonymous' },
-            ],
-        });
-
-        return {
-            ...responseCodes.GET_DATA_SUCCESS,
-            transactions,
-        };
-    } catch (error) {
-        console.log(error);
-        return responseCodes.SERVER_ERROR;
-    }
-};
-
 const approveTransactionService = async (user, id) => {
     const dbTransaction = await sequelize.transaction();
     try {
@@ -222,7 +203,10 @@ const approveTransactionService = async (user, id) => {
 
         if (transaction.status !== 'processing') return responseCodes.INVALID;
 
-        await transaction.update({status: 'completed', employee_id: user.id}, { dbTransaction });
+        await transaction.update({
+            status: 'completed',
+            employee_id: user.id
+        }, { dbTransaction });
 
         await dbTransaction.commit();
         return responseCodes.UPDATE_SUCCESS;
@@ -231,18 +215,37 @@ const approveTransactionService = async (user, id) => {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
-}
+};
 
 const cancelTransactionService = async (user, id) => {
     const dbTransaction = await sequelize.transaction();
     try {
         const transaction = await Transaction.findOne({ where: { id } }, { dbTransaction });
+        const customer = await Customer.findOne({ where: { id: transaction.customer_id } }, { dbTransaction });
         if (!transaction) return responseCodes.NOT_FOUND;
 
         if (transaction.status !== 'processing') return responseCodes.INVALID;
 
         const employeeId = user.role === 'customer' ? null : user.id;
-        await transaction.update({status: 'cancelled', employee_id: employeeId}, { dbTransaction });
+
+        const transactionValue = parseInt(transaction.value, 10);
+        const customerBalance = parseInt(customer.balance, 10);
+
+        await transaction.update({ status: 'cancelled', employee_id: employeeId }, { dbTransaction });
+
+        if (transaction.type === 'withdraw') {
+            await Transaction.create({
+                customer_id: transaction.customer_id,
+                type: 'refund',
+                value: transactionValue,  // Đảm bảo giá trị là số nguyên
+                status: 'completed',
+                content: `Yêu cầu rút tiền ${transaction.id} bị hủy`,
+                employeeId: employeeId,
+                balance_after: customerBalance + transactionValue, // Cập nhật số dư sau khi hoàn tiền
+            }, { dbTransaction });
+
+            await customer.update({ balance: customerBalance + transactionValue }, { dbTransaction });
+        }
 
         await dbTransaction.commit();
         return responseCodes.UPDATE_SUCCESS;
@@ -288,16 +291,94 @@ const getTransactionByCustomerIdService = async (customerId, page, pageSize) => 
     }
 }
 
+const queryTransactionService = async (user, query) => {
+    try {
+        const conditions = {};
+        const page = parseInt(query.page) || 1;
+        const pageSize = parseInt(query.pageSize) || 10;
+        if (user.role === 'customer') {
+            conditions.customer_id = user.id;
+        }
+
+        if (query.status && query.status.length > 0) {
+            conditions.status = {
+                [Op.in]: query.status
+            };
+        }
+
+
+        if (query.type && query.type.length > 0) {
+            conditions.type = {
+                [Op.in]: query.type
+            };
+        }
+
+        if (query.search) {
+            conditions[Op.or] = [
+                { customer_id: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } },
+                { content: { [Op.like]: `%${query.search}%` } },
+                { bol: { [Op.like]: `%${query.search}%` } }
+            ];
+        }
+
+        if (query.updatefromDate && query.updatetoDate) {
+            conditions.update_at = {
+                [Op.between]: [query.updatefromDate, query.updatetoDate]
+            };
+        } else if (query.updatefromDate) {
+            conditions.update_at = {
+                [Op.gte]: query.updatefromDate
+            };
+        } else if (query.updatetoDate) {
+            conditions.update_at = {
+                [Op.lte]: query.updatetoDate
+            };
+        }
+
+        if (query.createfromDate && query.createtoDate) {
+            conditions.create_at = {
+                [Op.between]: [query.createfromDate, query.createtoDate]
+            };
+        } else if (query.createfromDate) {
+            conditions.create_at = {
+                [Op.gte]: query.createfromDate
+            };
+        } else if (query.createtoDate) {
+            conditions.create_at = {
+                [Op.lte]: query.createtoDate
+            };
+        }
+
+        const transactions = await Transaction.findAndCountAll({
+            order: [['update_at', 'DESC']],
+            include: [
+                { model: Employee, as: 'employee' },
+            ],
+            where: conditions,
+            offset: (page - 1) * pageSize,
+            limit: pageSize,
+        });
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            transactions,
+        };
+    } catch (error) {
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+
 module.exports = {
     withdrawTransactionService,
     createTransactionService,
     depositTransactionService,
     getTransactionsByStatusService,
-    searchTransactionService,
     refundTransactionService,
     paymentTransactionService,
     approveTransactionService,
     cancelTransactionService,
     getAllTransactionsService,
     getTransactionByCustomerIdService,
+    queryTransactionService,
 };

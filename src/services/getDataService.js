@@ -1,13 +1,15 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Order = require('../models/order')(sequelize);
-const Consignment = require('../models/consignment')(sequelize);
-const DeliveryNote = require('../models/deliveryNote')(sequelize);
-const Complaint = require('../models/complaint')(sequelize);
-const History = require('../models/history')(sequelize);
-const Customer = require('../models/customer')(sequelize);
+const sequelize = require('../config');
+const Order = sequelize.models.Order;
+const Consignment = sequelize.models.Consignment;
+const Complaint = sequelize.models.Complaint;
+const History = sequelize.models.History;
+const Customer = sequelize.models.Customer;
+const Parameter = sequelize.models.Parameter;
 const responseCodes = require('../untils/response_types');
+
+const { Op } = require('sequelize');
 
 const getOverviewService = async (user) => {
     try {
@@ -46,6 +48,49 @@ const getOverviewService = async (user) => {
     }
 };
 
+const getOrderDepositService = async (customerId) => {
+    try {
+        const customer = await Customer.findOne({
+            where: { id: customerId },
+            attributes: ['balance', 'deposit_rate'],
+        });
+
+        if (!customer) {
+            return responseCodes.ACCOUNT_NOT_FOUND;
+        }
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            customer,
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
+
+const getDepositInfoService = async () => {
+    try {
+        const data = await Parameter.findAll({
+            attributes: ['type', 'value'],
+            where: {
+                type: {
+                    [Op.in]: ['hotline', 'bank', 'bank_account', 'bank_owner'],
+                },
+            },
+        });
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            data
+        }
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
+
 module.exports = {
     getOverviewService,
+    getOrderDepositService,
+    getDepositInfoService
 }

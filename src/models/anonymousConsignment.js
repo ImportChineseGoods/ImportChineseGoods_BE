@@ -7,7 +7,7 @@ module.exports = (sequelize) => {
         static associate(models) {
             AnonymousConsignment.hasOne(models.BOL, {
                 foreignKey: 'anonymous_id',
-                as: 'bol'
+                as: 'bol_anonymous'
             })
 
             AnonymousConsignment.hasMany(models.History, {

@@ -27,7 +27,7 @@ module.exports = (sequelize) => {
                 foreignKey: 'order_id',
                 as: 'histories'
             })
-            Order.hasOne(models.bol, {
+            Order.hasOne(models.BOL, {
                 foreignKey: 'order_id',
                 as: 'bol'
             })

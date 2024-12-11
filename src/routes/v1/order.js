@@ -19,7 +19,7 @@ const router = express.Router(); // /v1/api
 router.get("/", checkRole('exclude', ['customer']), getAllOrder);
 router.post("/new", checkRole('include', ['customer']), createOrder);
 router.get("/query", queryOrder);
-router.get("/customer/:customer_id", getOrderByCustomerId);
+router.get("/customer", getOrderByCustomerId);
 router.get("/:id", getOrderById);
 router.patch("/cancel/:id", checkRole('exclude', ['customer', 'warehouse']), cancelOrder);
 router.patch("/customer-cancel/:id", checkRole('include', ['customer']), customerCancelOrder);

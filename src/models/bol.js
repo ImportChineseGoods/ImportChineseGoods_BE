@@ -10,7 +10,7 @@ module.exports = (sequelize) => {
 
             BOL.belongsTo(models.Consignment, {
                 foreignKey: 'consignment_id',
-                as: 'consignment'
+                as: 'consignment',
             });
 
             BOL.belongsTo(models.AnonymousConsignment, {

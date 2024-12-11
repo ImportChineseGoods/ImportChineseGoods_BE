@@ -2,8 +2,8 @@ require('dotenv').config();
 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const sequelize = require('../config/sequelize');
-const Customer = require('../models/customer')(sequelize);
+const sequelize = require('../config');
+const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { Op } = require('sequelize');
 

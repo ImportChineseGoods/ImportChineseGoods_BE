@@ -1,9 +1,10 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const DeliveryNote = require('../models/deliveryNote')(sequelize);
-const Consignment = require('../models/consignment')(sequelize);
-const Order = require('../models/order')(sequelize);
+const sequelize = require('../config');
+const DeliveryNote = sequelize.models.DeliveryNote;
+const Consignment = sequelize.models.Consignment;
+const Order = sequelize.models.Order;
+const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { paymentTransactionService } = require('./transactionService');
 
@@ -248,6 +249,7 @@ const exportDeliveryNoteService = async (user, id) => {
             include: [
                 { model: Order, as: 'orders' },
                 { model: Consignment, as: 'consignments' },
+                { model: Customer, as: 'customer' },
             ],
             transaction,
         });
@@ -315,6 +317,7 @@ const exportDeliveryNoteService = async (user, id) => {
         }
 
         await deliveryNote.update({ status: 'exported', amount_paid: deliveryNote.total_amount }, { transaction, user });
+        await customer.update({accumulation: customer.accumulation + deliveryNote.total_amount}, {transaction, user});
 
         await transaction.commit();
         return {

@@ -1,7 +1,7 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Parameter = require('../models/parameter')(sequelize);
+const sequelize = require('../config');
+const Parameter = sequelize.models.Parameter;
 const responseCodes = require('../untils/response_types');
 
 const createParameterService = async (data) => {

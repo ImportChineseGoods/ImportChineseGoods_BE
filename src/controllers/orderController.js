@@ -2,9 +2,7 @@ const { createOrderService, getAllOrderService, customerCancelOrderService, getO
 const responseCodes = require('../untils/response_types');
 
 const createOrder = async (req, res) => {
-    if (!req.body.products || req.body.products.length === 0 || 
-        !req.body.purchase_fee || req.body.purchase_fee < 0 || 
-        !req.body.warehouse_id) {
+    if (!req.body.products || req.body.products.length === 0 || !req.body.warehouse_id) {
             const result = responseCodes.NOT_ENOUGH;
             return res.status(result.status).json(result);
     }
@@ -23,19 +21,19 @@ const getAllOrder = async (req, res) => {
 const getOrderByCustomerId = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const result = await getOrderByCustomerIdService(req.params.id, page, pageSize);
+    const result = await getOrderByCustomerIdService(req.user.id, page, pageSize);
     return res.status(result.status).json(result);
 }
 
 const getOrderById = async (req, res) => {
-    const result = await getOrderByIdService(req.params.id);
+    const result = await getOrderByIdService(req.user.id, req.params.id);
     return res.status(result.status).json(result);
 }
 
 const queryOrder = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const result = await queryOrderService(req.query, page, pageSize);
+    const result = await queryOrderService(req.user, req.query, page, pageSize);
     return res.status(result.status).json(result);
 }
 

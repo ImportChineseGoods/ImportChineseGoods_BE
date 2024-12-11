@@ -1,4 +1,4 @@
-const { createConsignmentService, getAllConsignmentService, customerCancelConsignmentService, getConsignmentByCustomerIdService, cancelConsignmentService, getConsignmentByIdService, queryConsignmentService,updateConsignmentService } = require("../services/consignmentService");
+const { createConsignmentService, deleteConsignmentService, getAllConsignmentService, customerCancelConsignmentService, getConsignmentByCustomerIdService, cancelConsignmentService, getConsignmentByIdService, queryConsignmentService,updateConsignmentService } = require("../services/consignmentService");
 const responseCodes = require('../untils/response_types');
 
 const createConsignment = async (req, res) => {
@@ -22,19 +22,19 @@ const getAllConsignment = async (req, res) => {
 const getConsignmentByCustomerId = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const result = await getConsignmentByCustomerIdService(req.params.id, page, pageSize);
+    const result = await getConsignmentByCustomerIdService(req.user.id, page, pageSize);
     return res.status(result.status).json(result);
 }
 
 const getConsignmentById = async (req, res) => {
-    const result = await getConsignmentByIdService(req.params.id);
+    const result = await getConsignmentByIdService(req.user.id, req.params.id);
     return res.status(result.status).json(result);
 }
 
 const queryConsignment = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-    const result = await queryConsignmentService(req.query, page, pageSize);
+    const result = await queryConsignmentService(req.user, req.query, page, pageSize);
     return res.status(result.status).json(result);
 }
 
@@ -49,7 +49,7 @@ const updateConsignment = async (req, res) => {
         return res.status(result.status).json(result);
     }
 
-    const result = await updateConsignmentService(req.params.id, req.body);
+    const result = await updateConsignmentService(req.user, req.params.id, req.body);
     return res.status(result.status).json(result);
 }
 
@@ -62,6 +62,11 @@ const customerCancelConsignment = async (req, res) => {
     const result = await customerCancelConsignmentService(req.user, req.params.id);
     return res.status(result.status).json(result);
 }
+
+const deleteConsignment = async (req, res) => {
+    const result = await deleteConsignmentService(req.params.id);
+    return res.status(result.status).json(result);
+}
 module.exports = {
     createConsignment,
     getAllConsignment,
@@ -71,4 +76,5 @@ module.exports = {
     updateConsignment,
     cancelConsignment,
     customerCancelConsignment,
+    deleteConsignment
 }

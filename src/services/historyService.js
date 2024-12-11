@@ -1,11 +1,11 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Order = require('../models/order')(sequelize);
-const Consignment = require('../models/consignment')(sequelize);
-const DeliveryNote = require('../models/deliveryNote')(sequelize);
-const Complaint = require('../models/complaint')(sequelize);
-const History = require('../models/history')(sequelize);
+const sequelize = require('../config');
+const Order = sequelize.models.Order;
+const Consignment = sequelize.models.Consignment;
+const DeliveryNote = sequelize.models.DeliveryNote;
+const Complaint = sequelize.models.Complaint;
+const History = sequelize.models.History;
 const responseCodes = require('../untils/response_types');
 
 const createHistoryService = async (user, data) => {

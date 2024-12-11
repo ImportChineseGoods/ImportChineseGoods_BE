@@ -1,9 +1,9 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Product = require('../models/product')(sequelize);
-const Customer = require('../models/customer')(sequelize);
-const Order = require('../models/order')(sequelize);
+const sequelize = require('../config');
+const Product = sequelize.models.Product;
+const Customer = sequelize.models.Customer;
+const Order = sequelize.models.Order;
 const responseCodes = require('../untils/response_types');
 
 const createProductService = async (id, data) => {
@@ -29,7 +29,7 @@ const createProductService = async (id, data) => {
 const getProductsByCustomerIdService = async (customerId, shopLimit, productLimit) => {
     try {
         const products = await Product.findAll({
-            where: { customer_id: customerId },
+            where: { customer_id: customerId, order_id: null },
             order: [['shop', 'ASC'], ['update_at', 'DESC']],
             limit: productLimit + 1,
         });
@@ -145,10 +145,26 @@ const deleteProductService = async (id) => {
     }
 };
 
+const getProductByIdService = async (id) => {
+    try {
+        const product = await Product.findOne({ where: { id } }, { attributes: [order_id]});
+        if (!product) return responseCodes.PRODUCT_NOT_FOUND;
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            product
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+
 module.exports = {
     createProductService,
     getProductsByCustomerIdService,
     updateProductService,
     updateProductInOrderService,
     deleteProductService,
+    getProductByIdService
 }

@@ -32,7 +32,10 @@ module.exports = (sequelize) => {
                 'hotline', 
                 'email', 
                 'youtube',
-                'facebook'
+                'facebook',
+                'bank',
+                'bank_account',
+                'bank_owner',
             ),
             allowNull: false,
             unique: true

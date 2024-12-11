@@ -1,7 +1,7 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Warehouse = require('../models/warehouse')(sequelize);
+const sequelize = require('../config');
+const Warehouse = sequelize.models.Warehouse;
 const responseCodes = require('../untils/response_types');
 
 const createWarehouseService = async (data) => {

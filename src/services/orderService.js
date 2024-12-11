@@ -1,12 +1,16 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const History = require('../models/history')(sequelize);
-const Order = require('../models/order')(sequelize);
-const Product = require('../models/product')(sequelize);
-const BOL = require('../models/bol')(sequelize);
+const { QueryTypes } = require('sequelize');
+const sequelize = require('../config');
+const BOL = sequelize.models.BOL
+const History = sequelize.models.History;
+const Order = sequelize.models.Order
+const Product = sequelize.models.Product;
+const Employee = sequelize.models.Employee
+const Warehouse = sequelize.models.Warehouse
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
+const { getProductByIdService } = require('./productService');
 
 const createOrderService = async (customerId, data) => {
     const transaction = await sequelize.transaction();
@@ -39,6 +43,10 @@ const createOrderService = async (customerId, data) => {
             ? data.products.reduce((total, product) => total + product.quantity, 0)
             : 0;
 
+        data.commodity_money = data.products && Array.isArray(data.products)
+            ? data.products.reduce((total, product) => total + product.price * product.quantity, 0)
+            : 0;
+
         const result = await Order.create(
             {
                 ...data,
@@ -56,12 +64,17 @@ const createOrderService = async (customerId, data) => {
 
         if (data.products && Array.isArray(data.products)) {
             for (const product of data.products) {
-                if (product.order_id) {
+                const productData = getProductByIdService(product.id);
+                if (productData.order_id) {
                     await transaction.rollback();
                     return responseCodes.PRODUCT_ALREADY_ORDERED;
                 }
                 await Product.update(
-                    { order_id: result.id },
+                    {
+                        order_id: result.id,
+                        quantity: product.quantity,
+                        note: product.note
+                    },
                     { where: { id: product.id }, transaction }
                 );
             }
@@ -99,33 +112,70 @@ const getAllOrderService = async (page, pageSize) => {
 
 const getOrderByCustomerIdService = async (customerId, page, pageSize) => {
     try {
+        const offset = (page - 1) * pageSize;
+        const limit = pageSize;
+
+        // const orders = await sequelize.query(
+        //     `
+        //     SELECT o.*, 
+        //         MAX(b.bol_code) AS bol_code, 
+        //         MAX(p.image_url) AS image_url
+        //     FROM orders o
+        //     LEFT JOIN bols b ON o.id = b.order_id
+        //     LEFT JOIN products p ON o.id = p.order_id
+        //     WHERE o.customer_id = :customerId
+        //     GROUP BY o.id
+        //     ORDER BY o.update_at DESC
+        //     LIMIT :limit OFFSET :offset
+        //     `,
+        //     {
+        //         replacements: { customerId, limit, offset },
+        //         type: QueryTypes.SELECT
+        //     }
+        // );
         const orders = await Order.findAndCountAll({
             where: { customer_id: customerId },
             order: [['update_at', 'DESC']],
-            limit: pageSize,
-            offset: (page - 1) * pageSize
+            limit,
+            offset,
+            include: [
+                { model: BOL, as: 'bol', attributes: ['bol_code'] },
+                { model: Product, as: 'products', attributes: ['image_url'], limit: 1 }
+            ]
         });
 
         return {
             ...responseCodes.GET_DATA_SUCCESS,
-            orders
+            orders,
         };
     } catch (error) {
         console.error(error);
         return responseCodes.SERVER_ERROR;
     }
-}
+};
 
-const getOrderByIdService = async (id) => {
+const getOrderByIdService = async (customerId, id) => {
     try {
-        const order = await Order.findOne({ 
-                where: { id },
-                include: [
-                    { model: Product, as: 'products' },
-                    { model: BOL, as: 'bol' },
-                    { model: History, as: 'histories' }
-                ]
-            });
+        const order = await Order.findOne({
+            where: { id: id, customer_id: customerId },
+            include: [
+                { model: Product, as: 'products' },
+                { model: BOL, as: 'bol' },
+                {
+                    model: Warehouse,
+                    as: 'warehouse',
+                    attributes: ['name']
+                },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [
+                        { model: Employee, as: 'employee', attributes: ['name'] }
+                    ]
+
+                }
+            ]
+        });
         if (!order) {
             return responseCodes.NOT_FOUND;
         }
@@ -140,9 +190,12 @@ const getOrderByIdService = async (id) => {
     }
 }
 
-const queryOrderService = async (query, page, pageSize) => {
+const queryOrderService = async (user, query, page, pageSize) => {
     try {
         const conditions = {};
+        if (user.role === 'customer') {
+            conditions.customer_id = user.id;
+        }
 
         if (query.status && query.status.length > 0) {
             conditions.status = {
@@ -153,7 +206,7 @@ const queryOrderService = async (query, page, pageSize) => {
         if (query.search) {
             conditions[sequelize.Op.or] = [
                 { customer_id: { [sequelize.Op.like]: `%${query.search}%` } },
-                { id: { [sequelize.Op.like]: `%${query.search}%` }},
+                { id: { [sequelize.Op.like]: `%${query.search}%` } },
                 { contract_code: { [sequelize.Op.like]: `%${query.search}%` } },
                 { bol: { [sequelize.Op.like]: `%${query.search}%` } }
             ];
@@ -260,7 +313,7 @@ const customerCancelOrderService = async (user, id) => {
         }
         const status = ['waiting_deposit', 'deposited'];
         if (status.includes(order.status)) {
-            await order.update({ status: 'cancelled' }, { transaction });
+            await order.update({ status: 'cancelled' });
             if (order.amount_paid > 0) {
                 const refunData = {
                     customer_id: order.customer_id,

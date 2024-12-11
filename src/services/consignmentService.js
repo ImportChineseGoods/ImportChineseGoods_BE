@@ -1,8 +1,12 @@
 require('dotenv').config();
 
+const { QueryTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
-const Consignment = require('../models/consignment')(sequelize);
-const BOL = require('../models/bol')(sequelize);
+const Consignment = sequelize.models.Consignment;
+const BOL = sequelize.models.BOL;
+const History = sequelize.models.History;
+const Employee = sequelize.models.Employee;
+const Warehouse = sequelize.models.Warehouse;
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
 
@@ -12,8 +16,8 @@ const createConsignmentService = async (customerId, data, dbTransaction) => {
         const lastConsignment = await Consignment.findOne({
             order: [['id', 'DESC']],
             attributes: ['id'],
-            transaction,
-        });
+            limit: 1,
+        }, { transaction });
         const bol = await BOL.findOne({ where: { bol_code: data.bol_code } });
         if (bol) return responseCodes.BOL_EXISTS;
 
@@ -77,38 +81,79 @@ const getAllConsignmentService = async (page, pageSize) => {
 
 const getConsignmentByCustomerIdService = async (customerId, page, pageSize) => {
     try {
+        const offset = (page - 1) * pageSize;
+        const limit = pageSize;
+
+        // Truy vấn với LEFT JOIN và phân trang
+        // const consignments = await sequelize.query(
+        //     `
+        //     SELECT c.*, b.bol_code
+        //     FROM consignments c
+        //     LEFT JOIN bols b ON c.id = b.consignment_id
+        //     WHERE c.customer_id = :customerId
+        //     ORDER BY c.update_at DESC
+        //     LIMIT :limit OFFSET :offset
+        //     `,
+        //     {
+        //         replacements: { customerId, limit, offset },
+        //         type: QueryTypes.SELECT
+        //     }
+        // );
+
+        // const total = await Consignment.count({ where: { customer_id: customerId } });
         const consignments = await Consignment.findAndCountAll({
             where: { customer_id: customerId },
             order: [['update_at', 'DESC']],
-            limit: pageSize,
-            offset: (page - 1) * pageSize
+            limit,
+            offset,
+            include: [
+                { model: BOL, as: 'bol', attributes: ['bol_code'] }
+            ]
         });
 
         return {
             ...responseCodes.GET_DATA_SUCCESS,
             consignments
-        }
+        };
     } catch (error) {
-        console.error(error);
+        console.error(error.message);
         return responseCodes.SERVER_ERROR;
     }
-}
+};
 
-const getConsignmentByIdService = async (id) => {
+const getConsignmentByIdService = async (customerId, id) => {
     try {
-        const consignment = await Consignment.findOne({ where: { id } });
-        if (!consignment) {
-            return responseCodes.NOT_FOUND;
-        }
+        console.log(id);
+        const consignment = await Consignment.findOne({
+            where: { id: id, customer_id: customerId },
+            include: [
+            { model: BOL, as: 'bol', attributes: ['bol_code'] },
+            {
+                model: History,
+                as: 'histories',
+                include: [
+                    { model: Employee, as: 'employee', attributes: ['name'] }
+                ]
 
-        return {
-            ...responseCodes.GET_DATA_SUCCESS,
-            consignment
-        }
-    } catch (error) {
-        console.error(error);
-        return responseCodes.SERVER_ERROR;
+            },
+            {
+                model: Warehouse,
+                as: 'warehouse',
+                attributes: ['name']
+            },
+        ]});
+    if (!consignment) {
+        return responseCodes.NOT_FOUND;
     }
+
+    return {
+        ...responseCodes.GET_DATA_SUCCESS,
+        consignment
+    }
+} catch (error) {
+    console.error(error);
+    return responseCodes.SERVER_ERROR;
+}
 }
 
 const queryConsignmentService = async (query, page, pageSize) => {
@@ -245,6 +290,23 @@ const customerCancelConsignmentService = async (user, id) => {
     }
 }
 
+const deleteConsignmentService = async (id) => {
+    try {
+        const consignment = await Consignment.findOne({ where: { id } });
+        if (!consignment) {
+            return responseCodes.NOT_FOUND;
+        }
+
+        if (consignment.status !== 'shop_shipping') {
+            return responseCodes.UNPROFITABLE;
+        }
+        await consignment.destroy();
+        return responseCodes.DELETE_SUCCESS;
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
 
 module.exports = {
     createConsignmentService,
@@ -254,5 +316,6 @@ module.exports = {
     queryConsignmentService,
     updateConsignmentService,
     cancelConsignmentService,
-    customerCancelConsignmentService
+    customerCancelConsignmentService,
+    deleteConsignmentService
 }

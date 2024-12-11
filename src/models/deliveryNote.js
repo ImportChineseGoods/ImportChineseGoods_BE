@@ -32,7 +32,12 @@ module.exports = (sequelize) => {
         },
         customer_id: {
             type: DataTypes.STRING,
-            allowNull: true
+            allowNull: true,
+            references: {
+                model: 'customers',
+                key: 'id'
+            },
+            onDelete: 'RESTRICT',
         },
         total_weight: {
             type: DataTypes.DECIMAL(10, 2),

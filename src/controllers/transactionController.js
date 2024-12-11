@@ -1,4 +1,4 @@
-const { withdrawTransactionService, createTransactionService, depositTransactionService, getTransactionsByStatusService, searchTransactionService, approveTransactionService, cancelTransactionService, getAllTransactionsService, getTransactionByCustomerIdService,  } = require("../services/transactionService");
+const { withdrawTransactionService, queryTransactionService, createTransactionService, depositTransactionService, getTransactionsByStatusService, approveTransactionService, cancelTransactionService, getAllTransactionsService, getTransactionByCustomerIdService,  } = require("../services/transactionService");
 const responseCodes = require('../untils/response_types');
 
 const withdrawTransaction = async (req, res) => {
@@ -15,12 +15,12 @@ const createTransaction = async (req, res) => {
 
     const valid = ['withdraw', 'deposit'];
 
-    if (!customer_id || !value || !valid.include(type) || value < 0) {
+    if (!customer_id || !value || !valid.includes(type) || value < 0) {
         const result = responseCodes.INVALID;
         return res.status(result.status).json(result);
     }
 
-    const result = await createTransactionService(req.body);
+    const result = await createTransactionService(req.user, req.body);
     return res.status(result.status).json(result);
 }
 
@@ -30,6 +30,7 @@ const depositTransaction = async (req, res) => {
         return res.status(result.status).json(result);
     }
     req.body.order_id = req.params.orderId;
+    console.log(req.user, req.body)
     const result = await depositTransactionService(req.user, req.body);
     return res.status(result.status).json(result);
 }
@@ -40,26 +41,6 @@ const getTransactionsByStatus = async (req, res) => {
     const result = await getTransactionsByStatusService(req.params.status, page, pageSize);
     return res.status(result.status).json(result);
 };
-
-const searchTransaction = async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const pageSize = parseInt(req.query.pageSize) || 50;
-
-    const result = await searchTransactionService(req.query.keyword, page, pageSize);
-
-    if (result) {
-        return res.status(result.status).json({
-            data: result.rows,
-            pagination: {
-                total: result.count || 0,
-                current: page,
-                pageSize: pageSize,
-            },
-        });
-    } else {
-        return res.status(result.status).json(result);
-    }
-}
 
 const approveTransaction = async (req, res) => {
     const result = await approveTransactionService(req.user, req.params.id);
@@ -86,14 +67,20 @@ const getTransactionByCustomerId = async (req, res) => {
     return res.status(result.status).json(result);
 }
 
+const queryTransaction = async (req, res) => {
+    console.log(req.query)
+    const result = await queryTransactionService(req.user, req.query);
+    return res.status(result.status).json(result);
+}
+
 module.exports = {
     withdrawTransaction,
     createTransaction,
     getTransactionsByStatus,
     depositTransaction,
-    searchTransaction,
     approveTransaction,
     cancelTransaction,
     getAllTransation,
     getTransactionByCustomerId,
+    queryTransaction,
 }

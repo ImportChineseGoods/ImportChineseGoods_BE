@@ -13,7 +13,7 @@ module.exports = (sequelize) => {
             });
             Customer.hasMany(models.DeliveryNote, {
                 foreignKey: 'customer_id',
-                as: 'transactions'
+                as: 'delivery_notes'
             });
             Customer.hasMany(models.Order, {
                 foreignKey: 'customer_id',
@@ -28,7 +28,7 @@ module.exports = (sequelize) => {
                 as: 'complaints'
             });
 
-            Customer.hasMany(models.Products, {
+            Customer.hasMany(models.Product, {
                 foreignKey: 'customer_id',
                 as: 'products'
             })

@@ -1,12 +1,12 @@
 require('dotenv').config();
 
-const sequelize = require('../config/sequelize');
-const Anonymous = require('../models/anonymousConsignment')(sequelize);
+const sequelize = require('../config');
+const AnonymousConsignment = sequelize.models.AnonymousConsignment;
 const responseCodes = require('../untils/response_types');
 
 const createAnonymousService = async (user, data) => {
     try {
-        const result = await Anonymous.create(data, { user });
+        const result = await AnonymousConsignment.create(data, { user });
         return {
             ...responseCodes.CREATE_ORDER_SUCCESS,
             anonymous: result,
@@ -19,7 +19,7 @@ const createAnonymousService = async (user, data) => {
 
 const getAllAnonymousService = async (page, pageSize) => {
     try {
-        const results = await Anonymous.findAndCountAll({
+        const results = await AnonymousConsignment.findAndCountAll({
             order: [['update_at', 'DESC']],
             offset: (page - 1) * pageSize,
             limit: pageSize,
@@ -37,7 +37,7 @@ const getAllAnonymousService = async (page, pageSize) => {
 
 const updateAnonymousService = async (user, id, data,) => {
     try {
-        const anonymous = await Anonymous.findOne({ where: { id } });
+        const anonymous = await AnonymousConsignment.findOne({ where: { id } });
         if (!anonymous) {
             return responseCodes.NOT_FOUND;
         }
@@ -55,7 +55,7 @@ const updateAnonymousService = async (user, id, data,) => {
 
 const deleteAnonymousService = async (id) => {
 try {
-    const anonymous = await Anonymous.findOne({ where: { id } });
+    const anonymous = await AnonymousConsignment.findOne({ where: { id } });
     if (!anonymous) {
         return responseCodes.NOT_FOUND;
     }

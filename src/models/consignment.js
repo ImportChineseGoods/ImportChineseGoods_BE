@@ -23,7 +23,7 @@ module.exports = (sequelize) => {
                 foreignKey: 'consignment_id',
                 as: 'histories'
             })
-            Consignment.hasOne(models.bol, {
+            Consignment.hasOne(models.BOL, {
                 foreignKey: 'consignment_id',
                 as: 'bol'
             })

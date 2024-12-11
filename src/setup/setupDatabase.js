@@ -1,5 +1,5 @@
 module.exports = function setupDatabase() {
-	const sequelize = require('../config/sequelize');
+	const sequelize = require('../config');
 	sequelize.sync().then(() => {
 		console.log('Connection has been established successfully')
 	}).catch(
