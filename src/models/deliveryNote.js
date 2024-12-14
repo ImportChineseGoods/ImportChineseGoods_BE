@@ -94,11 +94,19 @@ module.exports = (sequelize) => {
 
     DeliveryNote.afterCreate(async (deliveryNote, options) => {
         const History = sequelize.models.History;
+        const Customer = sequelize.models.Customer;
         await History.create({
             delivery_id: deliveryNote.id,
             status: deliveryNote.status,
             employee_id: options.user?.id || null
         }, { transaction: options.transaction });
+
+        if (deliveryNote.status === 'exported') {
+            const customer = await Customer.findByPk(deliveryNote.customer_id);
+            await customer.update({
+                accumulation: parseInt(customer.accumulation) + parseInt(deliveryNote.total_amount),
+            }, { transaction: options.transaction });
+        }
     });
 
     DeliveryNote.beforeUpdate(async (deliveryNote, options) => {

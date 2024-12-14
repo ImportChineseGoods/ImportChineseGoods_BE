@@ -4,13 +4,11 @@ const checkRole = require('../../middleware/checkRole');
 
 const router = express.Router(); // /v1/api
 
-router.all("*", checkRole('exclude', ['customer', 'warehouse']))
-
-router.get("/", getAllComplaint);
-router.post("/new", createComplaint);
-router.get("/:customerId", getComplaintsByCustomerId);
-router.patch("/confirm/:id", confirmProcess);
-router.patch("/:id", updateComplaint);
-router.patch("/:id", deleteComplaint);
+router.get("/", checkRole('exclude', ['customer', 'warehouse']), getAllComplaint);
+router.post("/new", checkRole('include', ['customer']), createComplaint);
+router.get("/customer", checkRole('include', ['customer']), getComplaintsByCustomerId);
+router.patch("/confirm/:id", checkRole('exclude', ['customer', 'warehouse']), confirmProcess);
+router.patch("/:id", checkRole('exclude', ['customer', 'warehouse']), updateComplaint);
+router.patch("/cancel/:id", checkRole('exclude', ['warehouse']), deleteComplaint);
 
 module.exports = router; 

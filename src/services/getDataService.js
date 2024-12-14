@@ -89,8 +89,34 @@ const getDepositInfoService = async () => {
     }
 };
 
+const getComplaintOrderService = async (customerId) => {
+    try {
+        const orders = await Order.findAll({
+            where: { customer_id: customerId },
+            attributes: ['id'],
+        });
+
+        const consignments = await Consignment.findAll({
+            where: { customer_id: customerId},
+            attributes: ['id'],
+        });
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            data: {
+                orders,
+                consignments,
+            },
+        }
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+
 module.exports = {
     getOverviewService,
     getOrderDepositService,
-    getDepositInfoService
+    getDepositInfoService,
+    getComplaintOrderService
 }

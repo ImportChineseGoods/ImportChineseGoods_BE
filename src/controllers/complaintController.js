@@ -10,7 +10,7 @@ const createComplaint = async (req, res) => {
         return res.status(result.status).json(result);
     }
 
-    const result = await createComplaintService(req.body);
+    const result = await createComplaintService(req.user.id, req.body);
     return res.status(result.status).json(result);
 }
 

@@ -44,7 +44,7 @@ const getAllCustomer = async (req, res) => {
 };
 
 const getCustomerById = async (req, res) => {
-    const result = await getCustomerByIdService(req.params.id);
+    const result = await getCustomerByIdService(req.params.id || req.user.id);
     return res.status(result.status).json(result);
 }
 

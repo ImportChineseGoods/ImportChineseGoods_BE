@@ -165,7 +165,10 @@ const deleteCustomerService = async (id) => {
 
 const getCustomerByIdService = async (id) => {
     try {
-        const customer = await Customer.findOne({ where: { id } });
+        const customer = await Customer.findOne({
+            where: { id },
+            attributes: { exclude: ['password'] }
+        });
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }

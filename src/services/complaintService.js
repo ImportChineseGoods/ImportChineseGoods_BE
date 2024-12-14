@@ -4,9 +4,10 @@ const sequelize = require('../config');
 const Consignment = sequelize.models.Consignment;
 const Order = sequelize.models.Order;
 const Complaint = sequelize.models.Complaint;
+const Employee = sequelize.models.Employee;
 const responseCodes = require('../untils/response_types');
 
-const createComplaintService = async (data) => {
+const createComplaintService = async (customerId, data) => {
     try {
         if (data.order_id) {
             const order = await Order.findOne({ where: { id: data.order_id } });
@@ -23,6 +24,7 @@ const createComplaintService = async (data) => {
         }
 
         data.status = "pending";
+        data.customer_id = customerId
 
         const result = await Complaint.create(data);
 
@@ -61,6 +63,9 @@ const getComplaintsByCustomerIdService = async (customerId, page, pageSize) => {
             order: [['update_at', 'DESC']],
             offset: (page - 1) * pageSize,
             limit: pageSize,
+            include: [
+                { model: Employee, as: 'employee', attributes: ['name'] } 
+            ]
         });
 
         return {

@@ -6,18 +6,18 @@ const checkRole = (type, roles) => {
         const userRole = req.user?.role;
 
         if (!userRole || !VALID_ROLES.includes(userRole)) {
-            return res.status(403).json({ message: 'Token không hợp lệ hoặc chưa được cung cấp' });
+            return res.status(403).json({ RM: 'Token không hợp lệ hoặc chưa được cung cấp' });
         }
 
         if (type !== 'include' && type !== 'exclude') {
-            return res.status(500).json({ message: 'Yêu cầu không hợp lệ' });
+            return res.status(500).json({ RM: 'Yêu cầu không hợp lệ' });
         }
 
         if (
             (type === 'include' && !roles.includes(userRole)) || 
             (type === 'exclude' && roles.includes(userRole))
         ) {
-            return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
+            return res.status(403).json({ RM: 'Bạn không có quyền thực hiện thao tác này' });
         }
         
         next();
