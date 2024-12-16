@@ -60,6 +60,10 @@ const defaultRoutes = [
     path: "/get",
     route: require("./getData.js")
   },
+  {
+    path: "/admin",
+    route: require("./adminData.js")
+  }
 ]
 defaultRoutes.forEach((route) => {
   router.use(route.path, route.route)

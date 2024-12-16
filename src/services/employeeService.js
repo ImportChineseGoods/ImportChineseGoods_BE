@@ -51,45 +51,45 @@ const loginEmployeeService = async (data) => {
     try {
         // fetch user by username
         const employee = await Employee.findOne({ where: { username: data.username } });
-        if (employee) {
-            //compare password
-            const match = await bcrypt.compare(data.password, employee.password);
-            if (!match) {
-                return responseCodes.INVALID_EMPLOYEE;
-            }
-            else {
-                //create access token
-                const payload = {
-                    id: employee.id,
-                    username: employee.username,
-                    name: employee.name,
-                    role: employee.role
-                }
-
-                const access_token = jwt.sign(payload, process.env.JWT_SECRET, {
-                    expiresIn: process.env.JWT_EXPIRE,
-                });
-                return {
-                    ...responseCodes.LOGIN_SUCCESS,
-                    access_token,
-                    user: {
-                        id: employee.id,
-                        name: employee.name,
-                        username: employee.username,
-                    }
-                }
-            }
-        } else {
+        if (!employee) {
             return responseCodes.INVALID_EMPLOYEE;
         }
+        //compare password
+        const match = await bcrypt.compare(data.password, employee.password);
+        if (!match) {
+            return responseCodes.INVALID_EMPLOYEE;
+        }
+        else {
+            //create access token
+            const payload = {
+                id: employee.id,
+                username: employee.username,
+                name: employee.name,
+                role: employee.role
+            }
 
+            const access_token = jwt.sign(payload, process.env.JWT_SECRET, {
+                expiresIn: process.env.JWT_EXPIRE,
+            });
+            return {
+                ...responseCodes.LOGIN_SUCCESS,
+                access_token,
+                user: {
+                    id: employee.id,
+                    name: employee.name,
+                    username: employee.username,
+                    role: employee.role,
+                    avatar: employee.avatar,
+                }
+            }
+        }
     } catch (error) {
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
 };
 
-const getAllEmployeeService = async (page, pageSize) => { 
+const getAllEmployeeService = async (page, pageSize) => {
     try {
         const result = await Employee.findAndCountAll({
             attributes: { exclude: ['password'] },

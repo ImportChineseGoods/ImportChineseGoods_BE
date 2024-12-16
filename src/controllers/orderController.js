@@ -26,7 +26,7 @@ const getOrderByCustomerId = async (req, res) => {
 }
 
 const getOrderById = async (req, res) => {
-    const result = await getOrderByIdService(req.user.id, req.params.id);
+    const result = await getOrderByIdService(req.user, req.params.id);
     return res.status(result.status).json(result);
 }
 

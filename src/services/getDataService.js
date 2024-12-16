@@ -4,7 +4,6 @@ const sequelize = require('../config');
 const Order = sequelize.models.Order;
 const Consignment = sequelize.models.Consignment;
 const Complaint = sequelize.models.Complaint;
-const History = sequelize.models.History;
 const Customer = sequelize.models.Customer;
 const Parameter = sequelize.models.Parameter;
 const responseCodes = require('../untils/response_types');
