@@ -92,6 +92,7 @@ module.exports = (sequelize) => {
                 ],
             });
             order.commodity_money = order.products.reduce((total, product) => total + product.price * product.quantity, 0);
+            order.number_of_products = order.products.reduce((total, product) => total + product.quantity, 0);
 
             await order.save();
         }

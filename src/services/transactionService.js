@@ -89,9 +89,10 @@ const depositTransactionService = async (user, data) => {
         data.content = 'Đặt cọc đơn hàng ' + order.id;
         
         data.status = 'completed';
+        const amount_paid = order.amount_paid + data.value;
 
         await customer.update({ balance: data.balance_after }, { dbTransaction });
-        await order.update({ status: 'deposited', amount_paid: data.value }, { dbTransaction });
+        await order.update({ status: 'deposited', amount_paid: amount_paid}, { dbTransaction });
         const result = await Transaction.create(data, { dbTransaction });
 
         await dbTransaction.commit();

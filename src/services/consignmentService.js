@@ -7,8 +7,10 @@ const BOL = sequelize.models.BOL;
 const History = sequelize.models.History;
 const Employee = sequelize.models.Employee;
 const Warehouse = sequelize.models.Warehouse;
+const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
+const { Op } = require('sequelize');
 
 const createConsignmentService = async (customerId, data, dbTransaction) => {
     const transaction = dbTransaction || await sequelize.transaction();
@@ -84,23 +86,6 @@ const getConsignmentByCustomerIdService = async (customerId, page, pageSize) => 
         const offset = (page - 1) * pageSize;
         const limit = pageSize;
 
-        // Truy vấn với LEFT JOIN và phân trang
-        // const consignments = await sequelize.query(
-        //     `
-        //     SELECT c.*, b.bol_code
-        //     FROM consignments c
-        //     LEFT JOIN bols b ON c.id = b.consignment_id
-        //     WHERE c.customer_id = :customerId
-        //     ORDER BY c.update_at DESC
-        //     LIMIT :limit OFFSET :offset
-        //     `,
-        //     {
-        //         replacements: { customerId, limit, offset },
-        //         type: QueryTypes.SELECT
-        //     }
-        // );
-
-        // const total = await Consignment.count({ where: { customer_id: customerId } });
         const consignments = await Consignment.findAndCountAll({
             where: { customer_id: customerId },
             order: [['update_at', 'DESC']],
@@ -121,77 +106,116 @@ const getConsignmentByCustomerIdService = async (customerId, page, pageSize) => 
     }
 };
 
-const getConsignmentByIdService = async (customerId, id) => {
+const getConsignmentByIdService = async (user, id) => {
     try {
-        console.log(id);
-        const consignment = await Consignment.findOne({
-            where: { id: id, customer_id: customerId },
+        let consignment; 
+        if (user.role === 'customer') {
+        consignment = await Consignment.findOne({
+            where: { id: id, customer_id: user.id },
             include: [
-            { model: BOL, as: 'bol', attributes: ['bol_code'] },
-            {
-                model: History,
-                as: 'histories',
+                { model: BOL, as: 'bol', attributes: ['bol_code'] },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [
+                        { model: Employee, as: 'employee', attributes: ['name'] }
+                    ]
+
+                },
+                {
+                    model: Warehouse,
+                    as: 'warehouse',
+                    attributes: ['name']
+                },
+            ]
+        });}
+        else {
+            consignment = await Consignment.findOne({
+                where: { id },
                 include: [
-                    { model: Employee, as: 'employee', attributes: ['name'] }
+                    { model: BOL, as: 'bol', attributes: ['bol_code'] },
+                    { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+                    {
+                        model: History,
+                        as: 'histories',
+                        include: [
+                            { model: Employee, as: 'employee', attributes: ['name'] }
+                        ]
+    
+                    },
+                    {
+                        model: Warehouse,
+                        as: 'warehouse',
+                        attributes: ['name']
+                    },
                 ]
+            });
+        }
+        if (!consignment) {
+            return responseCodes.NOT_FOUND;
+        }
 
-            },
-            {
-                model: Warehouse,
-                as: 'warehouse',
-                attributes: ['name']
-            },
-        ]});
-    if (!consignment) {
-        return responseCodes.NOT_FOUND;
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            consignment
+        }
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
     }
-
-    return {
-        ...responseCodes.GET_DATA_SUCCESS,
-        consignment
-    }
-} catch (error) {
-    console.error(error);
-    return responseCodes.SERVER_ERROR;
-}
 }
 
-const queryConsignmentService = async (query, page, pageSize) => {
+const queryConsignmentService = async (user, query, page, pageSize) => {
     try {
         const conditions = {};
+        if (query) {
+            if (user.role === 'customer') {
+                conditions.customer_id = user.id;
+            } else if (query?.customer) {
+                conditions.customer_id = query.customer;
+            }
 
-        if (query.status && query.status.length > 0) {
-            conditions.status = {
-                [sequelize.Op.in]: query.status
-            };
-        }
+            if (query?.status && query.status !== 'all') {
+                conditions.status = query.status;
+            }
+            if (query?.search) {
+                conditions[Op.or] = [
+                    { customer_id: { [Op.like]: `%${query.search}%` } },
+                    { id: { [Op.like]: `%${query.search}%` } },
+                    { '$bol.bol_code$': { [Op.like]: `%${query.search}%` } }
+                ];
+            }
 
-        if (query.search) {
-            conditions[sequelize.Op.or] = [
-                { customer_id: { [sequelize.Op.like]: `%${query.search}%` } },
-                { id: { [sequelize.Op.like]: `%${query.search}%` } }
-            ];
-        }
-
-        if (query.fromDate && query.toDate) {
-            conditions.update_at = {
-                [sequelize.Op.between]: [query.fromDate, query.toDate]
-            };
-        } else if (query.fromDate) {
-            conditions.update_at = {
-                [sequelize.Op.gte]: query.fromDate
-            };
-        } else if (query.toDate) {
-            conditions.update_at = {
-                [sequelize.Op.lte]: query.toDate
-            };
+            if (query?.dateRange) {
+                        const fromDate = new Date(query.dateRange[0]);
+                        const toDate = new Date(query.dateRange[1]);
+            
+                        if (!isNaN(fromDate) && !isNaN(toDate)) {
+                            conditions.update_at = {
+                                [Op.between]: [fromDate, toDate]
+                            };
+                        }
+                    }
         }
 
         const consignments = await Consignment.findAndCountAll({
             where: conditions,
             order: [['update_at', 'DESC']],
             limit: pageSize,
-            offset: (page - 1) * pageSize
+            offset: (page - 1) * pageSize,
+            distinct: true,
+            include: [
+                { model: BOL, as: 'bol', attributes: ['bol_code'] },
+                { model: Customer, as: 'customer', attributes: ['id', 'name'] },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [
+                        { model: Employee, as: 'employee', attributes: ['name'] }
+                    ]
+
+                },
+            ]
         });
 
         return {
@@ -204,7 +228,7 @@ const queryConsignmentService = async (query, page, pageSize) => {
     }
 };
 
-const updateConsignmentService = async (id, data) => {
+const updateConsignmentService = async (user, id, data) => {
     try {
         const consignment = await Consignment.findOne({ where: { id } });
         if (!consignment) {
@@ -223,19 +247,16 @@ const updateConsignmentService = async (id, data) => {
 };
 
 const cancelConsignmentService = async (user, id) => {
-    const transaction = await sequelize.transaction();
     try {
-        const consignment = await Consignment.findOne({ where: { id }, transaction });
+        const consignment = await Consignment.findOne({ where: { id }});
         if (!consignment) {
-            await transaction.rollback();
             return responseCodes.ORDER_NOT_FOUND;
         }
         const status = ['exported', 'cancelled'];
         if (status.includes(consignment.status)) {
-            await transaction.rollback();
             return responseCodes.UNPROFITABLE;
         }
-        await consignment.update({ status: 'cancelled' }, { transaction, user });
+        await consignment.update({ status: 'cancelled' }, { user });
         if (consignment.amount_paid > 0) {
             const refunData = {
                 customer_id: consignment.customer_id,
@@ -244,20 +265,17 @@ const cancelConsignmentService = async (user, id) => {
                 content: 'Hoàn tiền cho đơn hàng ' + consignment.id,
                 employee_id: user.id
             }
-            await refundTransactionService(refunData, transaction);
+            await refundTransactionService(refunData);
         }
 
-        await transaction.commit();
         return {
             ...responseCodes.UPDATE_SUCCESS,
             consignment,
-            history
         };
 
     } catch (error) {
-        await transaction.rollback();
         console.error(error);
-        return responseCodes.SERVER
+        return responseCodes.SERVER_ERROR
     }
 };
 

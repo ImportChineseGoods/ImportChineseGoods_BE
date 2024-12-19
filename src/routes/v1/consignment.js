@@ -14,7 +14,7 @@ const checkRole = require('../../middleware/checkRole');
 
 const router = express.Router(); // /v1/api
 
-router.get("/", getAllConsignment);
+router.get("/", checkRole('exclude', ['customer']), getAllConsignment);
 router.post("/new", createConsignment);
 router.get("/query", queryConsignment);
 router.get("/customer", getConsignmentByCustomerId);

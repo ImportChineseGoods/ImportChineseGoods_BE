@@ -27,7 +27,7 @@ const getConsignmentByCustomerId = async (req, res) => {
 }
 
 const getConsignmentById = async (req, res) => {
-    const result = await getConsignmentByIdService(req.user.id, req.params.id);
+    const result = await getConsignmentByIdService(req.user, req.params.id);
     return res.status(result.status).json(result);
 }
 

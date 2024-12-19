@@ -12,6 +12,7 @@ const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
 const { getProductByIdService } = require('./productService');
+const { Op } = require('sequelize');
 
 const createOrderService = async (customerId, data) => {
     const transaction = await sequelize.transaction();
@@ -190,279 +191,286 @@ const getOrderByIdService = async (user, id) => {
                 ],
             });
         }
-            if (!order) {
-                return responseCodes.NOT_FOUND;
-            }
-
-            return {
-                ...responseCodes.GET_DATA_SUCCESS,
-                order
-            };
-        } catch (error) {
-            console.error(error);
-            return responseCodes.SERVER_ERROR;
+        if (!order) {
+            return responseCodes.NOT_FOUND;
         }
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            order
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
     }
+}
 
 const queryOrderService = async (user, query, page, pageSize) => {
-        try {
-            const conditions = {};
-            if (user.role === 'customer') {
-                conditions.customer_id = user.id;
-            }
-
-            if (query.status && query.status.length > 0) {
-                conditions.status = {
-                    [sequelize.Op.in]: query.status
-                };
-            }
-
-            if (query.search) {
-                conditions[sequelize.Op.or] = [
-                    { customer_id: { [sequelize.Op.like]: `%${query.search}%` } },
-                    { id: { [sequelize.Op.like]: `%${query.search}%` } },
-                    { contract_code: { [sequelize.Op.like]: `%${query.search}%` } },
-                    { bol: { [sequelize.Op.like]: `%${query.search}%` } }
-                ];
-            }
-
-            if (query.fromDate && query.toDate) {
-                conditions.update_at = {
-                    [sequelize.Op.between]: [query.fromDate, query.toDate]
-                };
-            } else if (query.fromDate) {
-                conditions.update_at = {
-                    [sequelize.Op.gte]: query.fromDate
-                };
-            } else if (query.toDate) {
-                conditions.update_at = {
-                    [sequelize.Op.lte]: query.toDate
-                };
-            }
-
-            const orders = await Order.findAndCountAll({
-                order: [['update_at', 'DESC']],
-                include: [
-                    { model: BOL, as: 'bol' }
-                ],
-                where: conditions,
-                limit: pageSize,
-                offset: (page - 1) * pageSize
-            });
-
-            return {
-                ...responseCodes.GET_DATA_SUCCESS,
-                orders
-            };
-        } catch (error) {
-            console.error(error);
-            return responseCodes.SERVER_ERROR;
+    try {
+        const conditions = {};
+        if (user.role === 'customer') {
+            conditions.customer_id = user.id;
+        } else if (query?.customer) {
+            conditions.customer_id = query.customer;
         }
-    };
 
-    const updateOrderService = async (id, data) => {
-        try {
-            const order = await Order.findOne({ where: { id } });
-            if (!order) {
-                return responseCodes.NOT_FOUND;
-            }
-            await order.update(data);
-            return {
-                ...responseCodes.UPDATE_SUCCESS,
-                order
-            };
-
-        } catch (error) {
-            console.log(error);
-            return responseCodes.SERVER_ERROR;
+        if (query?.status && query.status !== 'all') {
+            conditions.status = query.status;
         }
-    };
 
-    const cancelOrderService = async (user, id) => {
-        const transaction = await sequelize.transaction();
-        try {
-            const order = await Order.findOne({ where: { id }, transaction });
-            if (!order) {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_FOUND;
+        if (query?.search) {
+            conditions[Op.or] = [
+                { customer_id: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } },
+                { contract_code: { [Op.like]: `%${query.search}%` } },
+                { '$bol.bol_code$': { [Op.like]: `%${query.search}%` } }
+            ];
+        }
+
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
+
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.update_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
             }
-            const status = ['exported', 'cancelled'];
-            if (status.includes(order.status)) {
-                await transaction.rollback();
-                return responseCodes.UNPROFITABLE;
+        }
+
+        const orders = await Order.findAndCountAll({
+            order: [['update_at', 'DESC']],
+            distinct: true,
+            include: [
+                { model: BOL, as: 'bol', attributes: ['bol_code'] },
+                { model: Product, as: 'products', attributes: ['image_url'], limit: 1 },
+                { model: Customer, as: 'customer', attributes: ['name', 'id'] },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [
+                        { model: Employee, as: 'employee', attributes: ['name'] }
+                    ]
+                }
+            ],
+            where: conditions,
+            limit: pageSize,
+            offset: (page - 1) * pageSize
+        });
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            orders
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
+
+const updateOrderService = async (id, data) => {
+    try {
+        const order = await Order.findOne({ where: { id } });
+        if (!order) {
+            return responseCodes.NOT_FOUND;
+        }
+        await order.update(data);
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            order
+        };
+
+    } catch (error) {
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
+
+const cancelOrderService = async (user, id) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const order = await Order.findOne({ where: { id }, transaction });
+        if (!order) {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_FOUND;
+        }
+        const status = ['exported', 'cancelled'];
+        if (status.includes(order.status)) {
+            await transaction.rollback();
+            return responseCodes.UNPROFITABLE;
+        }
+        await order.update(
+            { status: 'cancelled' },
+            { transaction, user }
+        );
+        if (order.amount_paid > 0) {
+            const refunData = {
+                customer_id: order.customer_id,
+                value: order.amount_paid,
+                type: 'refund',
+                content: 'Hoàn tiền cho đơn hàng ' + order.id,
+                employee_id: user.id
             }
-            await order.update(
-                { status: 'cancelled' },
-                { transaction, user }
-            );
+            await refundTransactionService(refunData, transaction);
+        }
+
+        await transaction.commit();
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            order,
+        };
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error(error);
+        return responseCodes.SERVER_ERROR
+    }
+};
+
+const customerCancelOrderService = async (user, id) => {
+    try {
+        const order = await Order.findOne({ where: { id, customer_id: user.id } });
+        if (!order) {
+            return responseCodes.ORDER_NOT_FOUND;
+        }
+        const status = ['waiting_deposit', 'deposited'];
+        if (status.includes(order.status)) {
+            await order.update({ status: 'cancelled' });
             if (order.amount_paid > 0) {
                 const refunData = {
                     customer_id: order.customer_id,
                     value: order.amount_paid,
                     type: 'refund',
                     content: 'Hoàn tiền cho đơn hàng ' + order.id,
-                    employee_id: user.id
                 }
                 await refundTransactionService(refunData, transaction);
             }
-
-            await transaction.commit();
-            return {
-                ...responseCodes.UPDATE_SUCCESS,
-                order,
-            };
-
-        } catch (error) {
-            await transaction.rollback();
-            console.error(error);
-            return responseCodes.SERVER_ERROR
+        } else {
+            return responseCodes.UNPROFITABLE;
         }
-    };
+        await order.update({ status: 'cancelled' });
+        return responseCodes.UPDATE_SUCCESS;
 
-    const customerCancelOrderService = async (user, id) => {
-        try {
-            const order = await Order.findOne({ where: { id, customer_id: user.id } });
-            if (!order) {
-                return responseCodes.ORDER_NOT_FOUND;
-            }
-            const status = ['waiting_deposit', 'deposited'];
-            if (status.includes(order.status)) {
-                await order.update({ status: 'cancelled' });
-                if (order.amount_paid > 0) {
-                    const refunData = {
-                        customer_id: order.customer_id,
-                        value: order.amount_paid,
-                        type: 'refund',
-                        content: 'Hoàn tiền cho đơn hàng ' + order.id,
-                    }
-                    await refundTransactionService(refunData, transaction);
-                }
-            } else {
-                return responseCodes.UNPROFITABLE;
-            }
-            await order.update({ status: 'cancelled' });
-            return responseCodes.UPDATE_SUCCESS;
-
-        } catch (error) {
-            console.log(error);
-            return responseCodes.SERVER_ERROR;
-        }
+    } catch (error) {
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
     }
+}
 
-    const assignContractCodeService = async (user, id, contractCode) => {
-        const transaction = await sequelize.transaction();
-        try {
-            const order = await Order.findOne({ where: { id }, transaction });
-            if (!order) {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_FOUND;
-            }
-
-            const orderCode = await Order.findOne({ where: { contract_code: contractCode }, transaction });
-            if (orderCode) {
-                await transaction.rollback();
-                return responseCodes.CONTRACT_CODE_EXISTED;
-            }
-
-            if (order.status === 'waiting_deposit') {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_DEPOSIT;
-            }
-
-            if (order.status === 'deposited') {
-                await order.update({ contract_code: contractCode, status: 'ordering' }, { transaction, user });
-            } else {
-                await order.update({ contract_code: contractCode }, { transaction });
-            }
-
-            await transaction.commit();
-            return {
-                ...responseCodes.UPDATE_SUCCESS,
-                order,
-                history
-            };
-        } catch (error) {
+const assignContractCodeService = async (user, id, contractCode) => {
+    const transaction = await sequelize.transaction();
+    try {
+        console.log(contractCode);
+        const order = await Order.findOne({ where: { id }, transaction });
+        if (!order) {
             await transaction.rollback();
-            console.error(error);
-            return responseCodes.SERVER_ERROR;
+            return responseCodes.ORDER_NOT_FOUND;
         }
-    };
 
-    const approveOrderService = async (user, id) => {
-        const transaction = await sequelize.transaction();
-        try {
-            const order = await Order.findOne({ where: { id }, transaction });
-            if (!order) {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_FOUND;
-            }
-
-            if (order.status !== 'ordering') {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_ORDERING;
-            }
-
-            await order.update({ status: 'ordered' }, { transaction, user });
-
-            await transaction.commit();
-            return {
-                ...responseCodes.UPDATE_SUCCESS,
-                order,
-                history
-            };
-        } catch (error) {
+        const orderCode = await Order.findOne({ where: { contract_code: contractCode }, transaction });
+        if (orderCode) {
             await transaction.rollback();
-            console.error(error);
-            return responseCodes.SERVER_ERROR;
+            return responseCodes.CONTRACT_CODE_EXISTED;
         }
-    }
 
-    const assignBOLService = async (user, id, bolCode) => {
-        const transaction = await sequelize.transaction();
-        try {
-            const order = await Order.findOne({ where: { id }, transaction });
-            if (!order) {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_FOUND;
-            }
-
-            const bol = await BOL.findOne({ where: { bol_code: data.bol_code } });
-            if (bol) return responseCodes.BOL_EXISTS;
-
-            if (order.status === 'ordered') {
-                await order.update({ status: 'shop_shipping' }, { transaction, user });
-
-                const bolData = {
-                    order_id: id,
-                    bol_code: bolCode,
-                    status: 'shop_shipping'
-                }
-                await BOL.create(bolData, { transaction });
-            } else {
-                await transaction.rollback();
-                return responseCodes.ORDER_NOT_ORDERING;
-            }
-            await transaction.commit();
-            return {
-                ...responseCodes.UPDATE_SUCCESS,
-                order,
-            };
-        } catch (error) {
+        if (order.status === 'waiting_deposit') {
             await transaction.rollback();
-            console.error(error);
-            return responseCodes.SERVER_ERROR;
+            return responseCodes.ORDER_NOT_DEPOSIT;
         }
+
+        if (order.status === 'deposited') {
+            await order.update({ contract_code: contractCode, status: 'ordering' }, { transaction, user });
+        } else {
+            await order.update({ contract_code: contractCode }, { transaction });
+        }
+
+        await transaction.commit();
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            order,
+            history
+        };
+    } catch (error) {
+        await transaction.rollback();
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
     }
-    module.exports = {
-        createOrderService,
-        getAllOrderService,
-        getOrderByCustomerIdService,
-        getOrderByIdService,
-        queryOrderService,
-        updateOrderService,
-        assignContractCodeService,
-        approveOrderService,
-        assignBOLService,
-        cancelOrderService,
-        customerCancelOrderService
+};
+
+const approveOrderService = async (user, id) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const order = await Order.findOne({ where: { id }, transaction });
+        if (!order) {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_FOUND;
+        }
+
+        if (order.status !== 'ordering') {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_ORDERING;
+        }
+
+        await order.update({ status: 'ordered' }, { transaction, user });
+
+        await transaction.commit();
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            order,
+        };
+    } catch (error) {
+        await transaction.rollback();
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
     }
+}
+
+const assignBOLService = async (user, id, bolCode) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const order = await Order.findOne({ where: { id }, transaction });
+        if (!order) {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_FOUND;
+        }
+
+        const bol = await BOL.findOne({ where: { bol_code: data.bol_code } });
+        if (bol) return responseCodes.BOL_EXISTS;
+
+        if (order.status === 'ordered') {
+            await order.update({ status: 'shop_shipping' }, { transaction, user });
+
+            const bolData = {
+                order_id: id,
+                bol_code: bolCode,
+                status: 'shop_shipping'
+            }
+            await BOL.create(bolData, { transaction });
+        } else {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_ORDERING;
+        }
+        await transaction.commit();
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            order,
+        };
+    } catch (error) {
+        await transaction.rollback();
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+module.exports = {
+    createOrderService,
+    getAllOrderService,
+    getOrderByCustomerIdService,
+    getOrderByIdService,
+    queryOrderService,
+    updateOrderService,
+    assignContractCodeService,
+    approveOrderService,
+    assignBOLService,
+    cancelOrderService,
+    customerCancelOrderService
+}

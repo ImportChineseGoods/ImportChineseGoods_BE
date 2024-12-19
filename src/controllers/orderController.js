@@ -69,6 +69,7 @@ const customerCancelOrder = async (req, res) => {
     return res.status(result.status).json(result);
 }
 const assignContractCode = async (req, res) => {
+    console.log(req.body)
     const result = await assignContractCodeService(req.user, req.params.id, req.body.contract_code);
     return res.status(result.status).json(result);
 }

@@ -96,25 +96,29 @@ const updateProductService = async (id, data) => {
     }
 };
 
-const updateProductInOrderService = async (productId, data) => {
+const updateProductInOrderService = async (user, productId, data) => {
     try {
         const product = await Product.findOne({ where: { id: productId } });
         if (!product) return responseCodes.NOT_FOUND;
 
         await product.update(data);
 
+        const order = await Order.findOne({ where: { id: product.order_id } });
+        if (!order) return responseCodes.ORDER_NOT_FOUND;
+
         const productsInOrder = await Product.findAll({ where: { order_id: product.order_id } });
 
         const newCommodityMoney = productsInOrder.reduce((total, product) => total + (product.price * product.quantity), 0);
         const newNumberOfProducts = productsInOrder.reduce((total, product) => total + product.quantity, 0);
 
-        const order = await Order.findOne({ where: { id: product.order_id } });
-        if (!order) return responseCodes.ORDER_NOT_FOUND;
+        const purchaseFee = Math.max(newCommodityMoney * order.applicable_rate * 0.03, 10000);
+        console.log(newCommodityMoney, newNumberOfProducts, purchaseFee);
 
         await order.update({
             commodity_money: newCommodityMoney,
-            number_of_product: newNumberOfProducts
-        });
+            number_of_product: newNumberOfProducts,
+            purchase_fee: purchaseFee
+        }, { user });
 
         return {
             ...responseCodes.UPDATE_SUCCESS,

@@ -29,7 +29,7 @@ const updateProductOrder = async (req, res) => {
         const result = responseCodes.INVALID;
         return res.status(result.status).json(result);
     }
-    const result = await updateProductInOrderService(req.params.id, req.body);
+    const result = await updateProductInOrderService(req.user, req.params.id, req.body);
     return res.status(result.status).json(result);
 }
 

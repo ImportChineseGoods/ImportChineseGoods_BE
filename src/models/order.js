@@ -238,7 +238,6 @@ module.exports = (sequelize) => {
         const Customer = sequelize.models.Customer;
         const History = sequelize.models.History;
         const customer = await Customer.findOne({ where: { id: order.customer_id } });
-
         order.shipping_fee = order.weight * order.weight_fee;
         order.total_amount =
             order.shipping_fee * (1 - order.shipping_discount / 100) +
