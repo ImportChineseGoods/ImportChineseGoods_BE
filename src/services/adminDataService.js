@@ -121,75 +121,23 @@ const getOverviewService = async (user) => {
     }
 };
 
-// const getOrderDepositService = async (customerId) => {
-//     try {
-//         const customer = await Customer.findOne({
-//             where: { id: customerId },
-//             attributes: ['balance', 'deposit_rate'],
-//         });
+const getAllCustomerService = async () => {
+    try {
+        const customers = await Customer.findAll({
+            attributes: ['id', 'name'],
+        });
 
-//         if (!customer) {
-//             return responseCodes.ACCOUNT_NOT_FOUND;
-//         }
-
-//         return {
-//             ...responseCodes.GET_DATA_SUCCESS,
-//             customer,
-//         };
-//     } catch (error) {
-//         console.error(error);
-//         return responseCodes.SERVER_ERROR;
-//     }
-// };
-
-// const getDepositInfoService = async () => {
-//     try {
-//         const data = await Parameter.findAll({
-//             attributes: ['type', 'value'],
-//             where: {
-//                 type: {
-//                     [Op.in]: ['hotline', 'bank', 'bank_account', 'bank_owner'],
-//                 },
-//             },
-//         });
-//         return {
-//             ...responseCodes.GET_DATA_SUCCESS,
-//             data
-//         }
-//     } catch (error) {
-//         console.error(error);
-//         return responseCodes.SERVER_ERROR;
-//     }
-// };
-
-// const getComplaintOrderService = async (customerId) => {
-//     try {
-//         const orders = await Order.findAll({
-//             where: { customer_id: customerId },
-//             attributes: ['id'],
-//         });
-
-//         const consignments = await Consignment.findAll({
-//             where: { customer_id: customerId},
-//             attributes: ['id'],
-//         });
-
-//         return {
-//             ...responseCodes.GET_DATA_SUCCESS,
-//             data: {
-//                 orders,
-//                 consignments,
-//             },
-//         }
-//     } catch (error) {
-//         console.error(error);
-//         return responseCodes.SERVER_ERROR;
-//     }
-// }
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            data: customers,
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
 
 module.exports = {
     getOverviewService,
-    // getOrderDepositService,
-    // getDepositInfoService,
-    // getComplaintOrderService
+    getAllCustomerService
 }

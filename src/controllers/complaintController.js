@@ -1,4 +1,4 @@
-const { createComplaintService, confirmProcessService, getAllComplaintService, getComplaintsByCustomerIdService, updateComplaintService, deleteComplaintService } = require("../services/complaintService");
+const { createComplaintService, queryComplaintService, confirmProcessService, getAllComplaintService, getComplaintsByCustomerIdService, updateComplaintService, deleteComplaintService } = require("../services/complaintService");
 const responseCodes = require('../untils/response_types');
 
 const createComplaint = async (req, res) => {
@@ -18,6 +18,13 @@ const getAllComplaint = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
     const result = await getAllComplaintService(page, pageSize);
+    return res.status(result.status).json(result);
+}
+
+const queryComplaint = async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 50;
+    const result = await queryComplaintService(req.user, req.query, page, pageSize);
     return res.status(result.status).json(result);
 }
 
@@ -50,5 +57,6 @@ module.exports = {
     getComplaintsByCustomerId,
     updateComplaint,
     deleteComplaint,
-    confirmProcess
+    confirmProcess,
+    queryComplaint
 }

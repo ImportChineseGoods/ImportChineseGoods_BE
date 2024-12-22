@@ -30,14 +30,7 @@ const getAllEmployee = async (req, res) => {
     const result = await getAllEmployeeService(page, pageSize);
 
     if (result) {
-        return res.status(result.status).json({
-            data: result.rows,
-            pagination: {
-                total: result.count || 0,
-                current: page,
-                pageSize: pageSize,
-            },
-        });
+        return res.status(result.status).json(result);
     } else {
         return res.status(result.status).json(result);
     }
@@ -78,18 +71,10 @@ const searchEmployee = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
 
-
-    const result = await searchEmployeeService(req.query.keyword, page, pageSize);
+    const result = await searchEmployeeService(req.query, page, pageSize);
 
     if (result) {
-        return res.status(result.status).json({
-            data: result.rows,
-            pagination: {
-                total: result.count || 0,
-                current: page,
-                pageSize: pageSize,
-            },
-        });
+        return res.status(result.status).json(result);
     } else {
         return res.status(result.status).json(result);
     }

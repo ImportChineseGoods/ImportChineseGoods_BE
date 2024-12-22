@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { QueryTypes } = require('sequelize');
+const { QueryTypes, literal } = require('sequelize');
 const sequelize = require('../config');
 const BOL = sequelize.models.BOL
 const History = sequelize.models.History;
@@ -12,7 +12,7 @@ const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
 const { getProductByIdService } = require('./productService');
-const { Op } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 
 const createOrderService = async (customerId, data) => {
     const transaction = await sequelize.transaction();
@@ -223,7 +223,10 @@ const queryOrderService = async (user, query, page, pageSize) => {
                 { customer_id: { [Op.like]: `%${query.search}%` } },
                 { id: { [Op.like]: `%${query.search}%` } },
                 { contract_code: { [Op.like]: `%${query.search}%` } },
-                { '$bol.bol_code$': { [Op.like]: `%${query.search}%` } }
+                literal(`EXISTS (
+                    SELECT 1 FROM bols AS bol
+                    WHERE bol.order_id = Order.id AND bol.bol_code LIKE '%${query.search}%'
+                )`),
             ];
         }
 
@@ -242,15 +245,26 @@ const queryOrderService = async (user, query, page, pageSize) => {
             order: [['update_at', 'DESC']],
             distinct: true,
             include: [
-                { model: BOL, as: 'bol', attributes: ['bol_code'] },
-                { model: Product, as: 'products', attributes: ['image_url'], limit: 1 },
-                { model: Customer, as: 'customer', attributes: ['name', 'id'] },
+                {
+                    model: BOL,
+                    as: 'bol',
+                    attributes: ['bol_code']
+                },
+                {
+                    model: Product,
+                    as: 'products',
+                    attributes: ['image_url'],
+                    limit: 1
+                },
+                {
+                    model: Customer,
+                    as: 'customer',
+                    attributes: ['name', 'id']
+                },
                 {
                     model: History,
                     as: 'histories',
-                    include: [
-                        { model: Employee, as: 'employee', attributes: ['name'] }
-                    ]
+                    include: [{ model: Employee, as: 'employee', attributes: ['name'] }]
                 }
             ],
             where: conditions,
@@ -360,7 +374,6 @@ const customerCancelOrderService = async (user, id) => {
 const assignContractCodeService = async (user, id, contractCode) => {
     const transaction = await sequelize.transaction();
     try {
-        console.log(contractCode);
         const order = await Order.findOne({ where: { id }, transaction });
         if (!order) {
             await transaction.rollback();
@@ -368,7 +381,7 @@ const assignContractCodeService = async (user, id, contractCode) => {
         }
 
         const orderCode = await Order.findOne({ where: { contract_code: contractCode }, transaction });
-        if (orderCode) {
+        if (orderCode && orderCode.id !== id) {
             await transaction.rollback();
             return responseCodes.CONTRACT_CODE_EXISTED;
         }
@@ -383,12 +396,10 @@ const assignContractCodeService = async (user, id, contractCode) => {
         } else {
             await order.update({ contract_code: contractCode }, { transaction });
         }
-
         await transaction.commit();
         return {
             ...responseCodes.UPDATE_SUCCESS,
             order,
-            history
         };
     } catch (error) {
         await transaction.rollback();
@@ -428,16 +439,26 @@ const approveOrderService = async (user, id) => {
 const assignBOLService = async (user, id, bolCode) => {
     const transaction = await sequelize.transaction();
     try {
-        const order = await Order.findOne({ where: { id }, transaction });
+        const order = await Order.findOne({
+            where: { id },
+            include: [
+                { model: BOL, as: 'bol', attributes: ['bol_code'] },
+            ],
+            transaction,
+        });
+
         if (!order) {
             await transaction.rollback();
             return responseCodes.ORDER_NOT_FOUND;
         }
 
-        const bol = await BOL.findOne({ where: { bol_code: data.bol_code } });
+        const bol = await BOL.findOne({ where: { bol_code: bolCode } });
         if (bol) return responseCodes.BOL_EXISTS;
-
-        if (order.status === 'ordered') {
+        const statusList = ['waiting_deposit', 'deposited', 'ordering'];
+        if (statusList.includes(order.status)) {
+            await transaction.rollback();
+            return responseCodes.ORDER_NOT_ORDERING;
+        } else if (order.status === 'ordered') {
             await order.update({ status: 'shop_shipping' }, { transaction, user });
 
             const bolData = {
@@ -447,8 +468,7 @@ const assignBOLService = async (user, id, bolCode) => {
             }
             await BOL.create(bolData, { transaction });
         } else {
-            await transaction.rollback();
-            return responseCodes.ORDER_NOT_ORDERING;
+            await BOL.update({ bol_code: bolCode }, { where: { order_id: id }, transaction });
         }
         await transaction.commit();
         return {

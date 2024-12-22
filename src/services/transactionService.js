@@ -296,7 +296,7 @@ const queryTransactionService = async (user, query) => {
     try {
         const conditions = {};
         const page = parseInt(query.page) || 1;
-        const pageSize = parseInt(query.pageSize) || 10;
+        const pageSize = parseInt(query.pageSize) || 50;
         if (user.role === 'customer') {
             conditions.customer_id = user.id;
         }
@@ -306,7 +306,6 @@ const queryTransactionService = async (user, query) => {
                 [Op.in]: query.status
             };
         }
-
 
         if (query.type && query.type.length > 0) {
             conditions.type = {
@@ -319,42 +318,33 @@ const queryTransactionService = async (user, query) => {
                 { customer_id: { [Op.like]: `%${query.search}%` } },
                 { id: { [Op.like]: `%${query.search}%` } },
                 { content: { [Op.like]: `%${query.search}%` } },
-                { bol: { [Op.like]: `%${query.search}%` } }
             ];
         }
 
-        if (query.updatefromDate && query.updatetoDate) {
-            conditions.update_at = {
-                [Op.between]: [query.updatefromDate, query.updatetoDate]
-            };
-        } else if (query.updatefromDate) {
-            conditions.update_at = {
-                [Op.gte]: query.updatefromDate
-            };
-        } else if (query.updatetoDate) {
-            conditions.update_at = {
-                [Op.lte]: query.updatetoDate
-            };
-        }
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
 
-        if (query.createfromDate && query.createtoDate) {
-            conditions.create_at = {
-                [Op.between]: [query.createfromDate, query.createtoDate]
-            };
-        } else if (query.createfromDate) {
-            conditions.create_at = {
-                [Op.gte]: query.createfromDate
-            };
-        } else if (query.createtoDate) {
-            conditions.create_at = {
-                [Op.lte]: query.createtoDate
-            };
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.create_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
+            }
         }
 
         const transactions = await Transaction.findAndCountAll({
             order: [['update_at', 'DESC']],
             include: [
-                { model: Employee, as: 'employee' },
+                { 
+                    model: Employee, 
+                    as: 'employee',
+                    attributes: ['id', 'username']
+                },
+                {
+                    model: Customer,
+                    as: 'customer',
+                    attributes: ['id', 'name']
+                }
             ],
             where: conditions,
             offset: (page - 1) * pageSize,

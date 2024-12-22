@@ -22,7 +22,7 @@ const createParameterService = async (data) => {
 const getAllParametersService = async (page, pageSize) => {
     try {
         const parameters = await Parameter.findAll({
-            order: [['update_at', 'DESC']],
+            order: [['create_at', 'DESC']],
             offset: (page - 1) * pageSize,
             limit: pageSize,
         });

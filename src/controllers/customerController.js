@@ -50,7 +50,7 @@ const getCustomerById = async (req, res) => {
 
 const updateCustomer = async (req, res) => {
     const data = {
-        sale_id: req.body?.sale_id,
+        sales_id: req.body?.sales_id,
         purchase_discount: req.body?.purchase_discount,
         shipping_discount: req.body?.shipping_discount,
         note: req.body?.note,
@@ -74,17 +74,10 @@ const searchCustomer = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
 
-    const result = await searchCustomerService(req.query.keyword, page, pageSize);
+    const result = await searchCustomerService(req.query, page, pageSize);
 
     if (result) {
-        return res.status(result.status).json({
-            data: result.rows,
-            pagination: {
-                total: result.count || 0,
-                current: page,
-                pageSize: pageSize,
-            },
-        });
+        return res.status(result.status).json(result);
     } else {
         return res.status(result.status).json(result);
     }

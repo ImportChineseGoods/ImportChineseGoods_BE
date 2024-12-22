@@ -10,7 +10,7 @@ const Warehouse = sequelize.models.Warehouse;
 const Customer = sequelize.models.Customer;
 const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
-const { Op } = require('sequelize');
+const { Sequelize, Op } = require('sequelize');
 
 const createConsignmentService = async (customerId, data, dbTransaction) => {
     const transaction = dbTransaction || await sequelize.transaction();
@@ -182,7 +182,10 @@ const queryConsignmentService = async (user, query, page, pageSize) => {
                 conditions[Op.or] = [
                     { customer_id: { [Op.like]: `%${query.search}%` } },
                     { id: { [Op.like]: `%${query.search}%` } },
-                    { '$bol.bol_code$': { [Op.like]: `%${query.search}%` } }
+                    Sequelize.literal(`EXISTS (
+                        SELECT 1 FROM bols AS bol
+                        WHERE bol.consignment_id = Consignment.id AND bol.bol_code LIKE '%${query.search}%'
+                    )`)
                 ];
             }
 

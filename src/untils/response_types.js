@@ -135,11 +135,6 @@ module.exports = {
         RC: '0025',
         RM: "Xóa mã vận đơn thành công"
     },
-    DELETE_SUCCESS: {
-        status: 200,
-        RC: '0026',
-        RM: "Xóa thành công"
-    },
     CREATE_COMPLAINT_SUCCES: {
         status: 200,
         RC: '0027',

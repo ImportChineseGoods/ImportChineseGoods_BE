@@ -21,6 +21,10 @@ module.exports = (sequelize) => {
                 foreignKey: 'customer_id',
                 as: 'customer'
             });
+            Complaint.hasMany(models.History, {
+                foreignKey: 'complaint_id',
+                as: 'histories'
+            });
         }
     }
 

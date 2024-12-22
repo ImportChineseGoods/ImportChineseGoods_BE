@@ -68,7 +68,6 @@ const getTransactionByCustomerId = async (req, res) => {
 }
 
 const queryTransaction = async (req, res) => {
-    console.log(req.query)
     const result = await queryTransactionService(req.user, req.query);
     return res.status(result.status).json(result);
 }

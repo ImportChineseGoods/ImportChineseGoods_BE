@@ -4,8 +4,10 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const sequelize = require('../config');
 const Customer = sequelize.models.Customer;
+const Employee = sequelize.models.Employee;
 const responseCodes = require('../untils/response_types');
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
+const { name } = require('ejs');
 
 const saltRounds = 10;
 
@@ -43,7 +45,7 @@ const createCustomerService = async (data) => {
 
         const hashPassword = await bcrypt.hash(data.password, saltRounds);
 
-        const result = await Customer.create({
+        const customers = await Customer.create({
             id: newId,
             name: data.name,
             email: data.email,
@@ -104,7 +106,7 @@ const loginCustomerService = async (data) => {
     }
 };
 
-const getAllCustomerService = async (page, pageSize) => { 
+const getAllCustomerService = async (page, pageSize) => {
     try {
         const result = await Customer.findAndCountAll({
             attributes: { exclude: ['password'] },
@@ -167,7 +169,14 @@ const getCustomerByIdService = async (id) => {
     try {
         const customer = await Customer.findOne({
             where: { id },
-            attributes: { exclude: ['password'] }
+            attributes: { exclude: ['password', 'avatar'] },
+            include: [
+                {
+                    model: Employee,
+                    as: 'sales',
+                    attributes: ['id', 'name']
+                }
+            ]
         });
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
@@ -182,22 +191,47 @@ const getCustomerByIdService = async (id) => {
     }
 };
 
-const searchCustomerService = async (keyword, page, pageSize) => {
+const searchCustomerService = async (query, page, pageSize) => {
     try {
-        const result = await Customer.findAndCountAll({
+        const conditions = {};
+
+        if (query?.search) {
+            conditions[Op.or] = [
+                { email: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } },
+                { phone: { [Op.like]: `%${query.search}%` } },
+                { name: { [Op.like]: `%${query.search}%` } }
+            ];
+        }
+
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
+
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.create_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
+            }
+        }
+        const customers = await Customer.findAndCountAll({
+            order: [['create_at', 'DESC']],
+            distinct: true,
             offset: (page - 1) * pageSize,
             limit: pageSize,
-            where: {
-                [Op.or]: [
-                    { id: { [Op.like]: `%${keyword}%` } },
-                    { email: { [Op.like]: `%${keyword}%` } },
-                    { phone: { [Op.like]: `%${keyword}%` } },
-                ]
-            }
+            where: conditions,
+            attributes: { exclude: ['password'] },
+            include: [
+                {
+                    model: Employee,
+                    as: 'sales',
+                    attributes: ['id', 'name']
+                }
+            ]
         });
         return {
             ...responseCodes.GET_DATA_SUCCESS,
-            result
+            customers
         }
     } catch (error) {
         console.log(error);

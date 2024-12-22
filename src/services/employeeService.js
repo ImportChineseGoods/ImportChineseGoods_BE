@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const sequelize = require('../config');
 const Employee = sequelize.models.Employee;
 const responseCodes = require('../untils/response_types');
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
 
 const saltRounds = 10;
 
@@ -91,8 +91,8 @@ const loginEmployeeService = async (data) => {
 
 const getAllEmployeeService = async (page, pageSize) => {
     try {
-        const result = await Employee.findAndCountAll({
-            attributes: { exclude: ['password'] },
+        const employees = await Employee.findAndCountAll({
+            attributes: { exclude: ['password', 'avatar'] },
             offset: (page - 1) * pageSize,
             limit: pageSize,
             where: {
@@ -103,7 +103,7 @@ const getAllEmployeeService = async (page, pageSize) => {
 
         return {
             ...responseCodes.GET_DATA_SUCCESS,
-            result
+            employees
         };
     } catch (error) {
         console.log(error);
@@ -132,15 +132,18 @@ const updateEmployeeService = async (id, data) => {
 
 const deleteEmployeeService = async (id) => {
     try {
-        const employee = await Employee.findOne({ where: { id } });
+        const employee = await Employee.findOne({ where: { id }, attributes: ['is_active', 'id'] });
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
-
+        console.log(employee);
+        console.log(!employee.is_active);
+    
         await employee.update({
-            is_active: false
+            is_active: !employee.is_active,
+            where: { id }
         });
-        return responseCodes.DELETE_SUCCESS;
+        return responseCodes.UPDATE_SUCCESS;
 
     } catch (error) {
         console.log(error);
@@ -150,7 +153,7 @@ const deleteEmployeeService = async (id) => {
 
 const getEmployeeByIdService = async (id) => {
     try {
-        const employee = await Employee.findOne({ where: { id } });
+        const employee = await Employee.findOne({ where: { id }, attributes: { exclude: ['password'] } });
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
@@ -164,21 +167,40 @@ const getEmployeeByIdService = async (id) => {
     }
 };
 
-const searchEmployeeService = async (keyword, page, pageSize) => {
+const searchEmployeeService = async (query, page, pageSize) => {
     try {
-        const result = await Employee.findAndCountAll({
+        const conditions = {};
+
+        if (query?.search) {
+            conditions[Op.or] = [
+                { email: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } },
+                { phone: { [Op.like]: `%${query.search}%` } },
+                { name: { [Op.like]: `%${query.search}%` } },
+                { username: { [Op.like]: `%${query.search}%` } },
+            ];
+        }
+
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
+
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.create_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
+            }
+        }
+
+        const employees = await Employee.findAndCountAll({
             offset: (page - 1) * pageSize,
             limit: pageSize,
-            where: {
-                [Op.or]: [
-                    { email: { [Op.like]: `%${keyword}%` } },
-                    { phone: { [Op.like]: `%${keyword}%` } },
-                ]
-            }
+            attributes: { exclude: ['password'] },
+            where: conditions,
         });
         return {
             ...responseCodes.GET_DATA_SUCCESS,
-            result
+            employees
         };
     } catch (error) {
         console.log(error);
