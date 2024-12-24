@@ -164,12 +164,12 @@ module.exports = (sequelize) => {
 
         if (consignment._previousDataValues.status !== consignment.status) {
             const employeeId = options?.user.id || null;
-
+            console.log(consignment, employeeId)
             await History.create({
                 consignment_id: consignment.id,
                 status: consignment.status,
                 employee_id: employeeId,
-            });
+            }, {transaction: options.transaction});
         }
 
         if (consignment.delivery_id && consignment._previousDataValues.outstanding_amount !== consignment.outstanding_amount) {
@@ -178,7 +178,7 @@ module.exports = (sequelize) => {
                 include: [
                     { model: Consignment, as: 'consignments' },
                 ],
-                transaction,
+                transaction: options.transaction,
             });
             delivery.total_amount = delivery.consignments.reduce((acc, cur) => acc + cur.total_amount, 0) + delivery.incurred_fee;
             delivery.amount_paid = delivery.consignments.reduce((acc, cur) => acc + cur.amount_paid, 0);

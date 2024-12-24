@@ -1,4 +1,4 @@
-const { getOverviewService, getAllCustomerService } = require("../services/adminDataService");
+const { getOverviewService, getAllCustomerService, getCustomerService } = require("../services/adminDataService");
 const responseCodes = require('../untils/response_types');
 
 const getOverviewData = async (req, res) => {
@@ -11,8 +11,13 @@ const getAllCustomerData = async (req, res) => {
     return res.status(result.status).json(result);
 }
 
+const getCustomer = async (req, res) => {
+    const result = await getCustomerService(req.query);
+    return res.status(result.status).json(result);
+}
 
 module.exports = {
     getOverviewData,
-    getAllCustomerData
+    getAllCustomerData,
+    getCustomer
 }

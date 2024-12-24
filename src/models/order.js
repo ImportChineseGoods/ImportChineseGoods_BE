@@ -238,18 +238,18 @@ module.exports = (sequelize) => {
         const Customer = sequelize.models.Customer;
         const History = sequelize.models.History;
         const customer = await Customer.findOne({ where: { id: order.customer_id } });
-        order.shipping_fee = order.weight * order.weight_fee;
-        order.total_amount =
+        order.shipping_fee = parseInt(order.weight * order.weight_fee);
+        order.total_amount = parseInt(
             order.shipping_fee * (1 - order.shipping_discount / 100) +
             order.incurred_fee +
             order.commodity_money * order.applicable_rate +
             order.packing_fee +
             order.counting_fee +
             order.purchase_fee * (1 - order.purchase_discount / 100) +
-            order.china_shipping_fee * order.applicable_rate;
-        order.outstanding_amount = order.total_amount - order.amount_paid;
+            order.china_shipping_fee * order.applicable_rate);
+        order.outstanding_amount = parseInt(order.total_amount - order.amount_paid);
 
-        const deposit = customer.deposit_rate / 100 * order.commodity_money * order.applicable_rate;
+        const deposit = parseInt(customer.deposit_rate / 100 * order.commodity_money * order.applicable_rate);
         const status = ['deposited', 'ordering'];
         if (order.amount_paid < deposit && status.includes(order.status)) {
             order.status = 'waiting_deposit';

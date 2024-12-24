@@ -137,7 +137,31 @@ const getAllCustomerService = async () => {
     }
 }
 
+const getCustomerService = async (query) => {
+    const customerConditions = {};
+
+    if (query?.search) {
+        customerConditions[Op.or] = [
+            { id: { [Op.like]: `%${query.search}%` } },
+            { name: { [Op.like]: `%${query.search}%` } }
+        ];
+    }
+
+    const customers = await Customer.findAll({
+        where: customerConditions,
+        attributes: ['id', 'name'],
+        limit: 10,
+    });
+
+    return {
+        ...responseCodes.GET_DATA_SUCCESS,
+        data: customers,
+    }
+};
+
+
 module.exports = {
     getOverviewService,
-    getAllCustomerService
+    getAllCustomerService,
+    getCustomerService,
 }

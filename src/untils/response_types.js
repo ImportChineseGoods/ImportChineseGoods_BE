@@ -235,4 +235,9 @@ module.exports = {
         RC: '0046',
         RM: "Không có kết quả nào được tìm thấy"
     },
+    BOL_IMPORTED: {
+        status: 400,
+        RC: '0047',
+        RM: "Đơn hàng đã được nhập kho"
+    }
 };

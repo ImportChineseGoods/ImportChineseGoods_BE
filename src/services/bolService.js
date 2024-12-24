@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const { Op, literal } = require('sequelize');
 const sequelize = require('../config');
 const AnonymousConsignment = sequelize.models.AnonymousConsignment;
 const BOL = sequelize.models.BOL;
@@ -45,7 +46,15 @@ const updateBOLService = async (user, bol_code, data) => {
             return await createBOLService(data, transaction);
         }
 
-        await bol.update(data, { transaction });
+        if (bol.status === data.status) {
+            await transaction.rollback();
+            return responseCodes.BOL_IMPORTED;
+        }
+
+        await bol.update({
+            status: data.status,
+            weight: data?.weight
+        }, { transaction });
 
         if (data.status) {
             if (bol.order_id) {
@@ -89,7 +98,7 @@ const assignCustomerService = async (user, customerId, data) => {
     const transaction = await sequelize.transaction();
     try {
         const customer = await Customer.findOne({ where: { id: customerId }, transaction })
-        
+
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
@@ -100,16 +109,16 @@ const assignCustomerService = async (user, customerId, data) => {
                 weight: bol.weight,
             }, { transaction, user });
             const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
-            const histories = await History.findAll({ where: { anonymous_id: anonymous.id}})
+            const histories = await History.findAll({ where: { anonymous_id: anonymous.id } })
             for (const history of histories) {
-                await history.update({ 
+                await history.update({
                     consignment_id: consignment.id,
                     anonymous_id: null
                 }, { transaction });
             }
             await anonymous.destroy({ transaction });
             await BOL.update(
-                { 
+                {
                     consignment_id: consignment.id,
                     anonymous_id: null
                 },
@@ -177,19 +186,69 @@ const getBOLsByStatusService = async (status, page, pageSize) => {
     }
 };
 
-const searchBOLService = async (keyword, page, pageSize) => {
+const searchBOLService = async (query, page, pageSize) => {
     try {
+        const conditions = {};
+        const customerConditions = {};
+
+        if (query?.search) {
+            conditions[Op.or] = [
+                { consignment_id: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } },
+                { anonymous_id: { [Op.like]: `%${query.search}%` } },
+                { order_id: { [Op.like]: `%${query.search}%` } },
+            ];
+        }
+
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
+
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.update_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
+            }
+        }
+
+        if (query?.customer) {
+            customerConditions.customer_id = query.customer;
+        }
+
         const bols = await BOL.findAndCountAll({
-            where: {
-                bol_code: {
-                    [sequelize.Op.like]: `%${keyword}%`,
-                },
-            },
+            where: conditions,
+            order: [['update_at', 'DESC']],
             offset: (page - 1) * pageSize,
             limit: pageSize,
             include: [
-                { model: Order, as: 'order' },
-                { model: Consignment, as: 'consignment' },
+                {
+                    model: Order,
+                    as: 'order',
+                    attributes: ['id'],
+                    include: [
+                        {
+                            model: Customer,
+                            as: 'customer',
+                            attributes: ['id', 'name'],
+                            where: customerConditions,
+                            required: query?.customer ? true : false
+                        }
+                    ]
+                },
+                {
+                    model: Consignment,
+                    as: 'consignment',
+                    attributes: ['id'],
+                    include: [
+                        {
+                            model: Customer,
+                            as: 'customer',
+                            attributes: ['id', 'name'],
+                            where: customerConditions,
+                            required: query?.customer ? true : false
+                        }
+                    ]
+                },
                 { model: AnonymousConsignment, as: 'anonymous' },
             ],
         });
@@ -204,21 +263,135 @@ const searchBOLService = async (keyword, page, pageSize) => {
     }
 }
 
-const deleteBOLService = async (id) => {
+const deleteBOLService = async (id, transaction) => {
     try {
-        const bol = await BOL.findOne({ where: { id } });
+        const bol = await BOL.findOne({
+            where: { bol_code: id },
+            include: [
+                {
+                    model: AnonymousConsignment,
+                    as: 'anonymous',
+                    attribute: ['id'],
+                    include: [
+                        {
+                            model: History,
+                            as: 'histories',
+                            attributes: ['id']
+                        }
+                    ]
+                }
+            ],
+            transaction
+        });
+        if (!bol) {
+            await transaction.rollback();
+            return responseCodes.BOL_NOT_FOUND;
+        }
+
+        const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
+
+        console.log(bol.anonymous.histories.length);
+        if (bol.anonymous_id && bol.anonymous.histories.length < 2) {
+            await anonymous.destroy();
+            await transaction.commit();
+            return responseCodes.DELETE_BOL_SUCCESS;
+        }
+
+        await transaction.rollback();
+        return responseCodes.UNPROFITABLE;
+
+    } catch (error) {
+        await transaction.rollback();
+        console.log(error);
+        return responseCodes.SERVER_ERROR;
+    }
+};
+
+const undoBOLService = async (user, bol_code) => {
+    const transaction = await sequelize.transaction();
+    try {
+        const bol = await BOL.findOne({
+            where: { bol_code },
+            include: [
+                {
+                    model: Order,
+                    as: 'order',
+                    attributes: ['id'],
+                    include: [
+                        {
+                            model: History,
+                            as: 'histories',
+                            order: [['create_at', 'DESC']]
+                        }
+                    ]
+                },
+                {
+                    model: Consignment,
+                    as: 'consignment',
+                    attributes: ['id'],
+                    include: [
+                        {
+                            model: History,
+                            as: 'histories',
+                            order: [['create_at', 'DESC']]
+                        }
+                    ]
+                },
+                {
+                    model: AnonymousConsignment,
+                    as: 'anonymous',
+                    attributes: ['id'],
+                    include: [
+                        {
+                            model: History,
+                            as: 'histories',
+                            order: [['create_at', 'DESC']]
+                        }
+                    ]
+                },
+            ],
+            transaction
+        });
+
         if (!bol) {
             return responseCodes.BOL_NOT_FOUND;
         }
 
-        if (bol.anonymous_id && bol.create_at === bol.update_at) {
-            await bol.destroy();
-            return responseCodes.DELETE_BOL_SUCCESS;
+        let previousStatus = null;
+
+        if (bol.order && bol.order.histories.length > 1) {
+            previousStatus = bol.order.histories[1].status;
+        } else if (bol.consignment && bol.consignment.histories.length > 1) {
+            previousStatus = bol.consignment.histories[1].status;
+        } else if (bol.anonymous && bol.anonymous.histories.length > 1) {
+            previousStatus = bol.anonymous.histories[1].status;
         }
 
-        return responseCodes.UNPROFITABLE;
+        if (previousStatus) {
+            await bol.update({ status: previousStatus }, { transaction });
 
+            if (bol.order_id) {
+                const order = await Order.findOne({ where: { id: bol.order_id }, transaction });
+                await order.update({ status: previousStatus }, { user, transaction });
+            } else if (bol.consignment_id) {
+                const consignment = await Consignment.findOne({ where: { id: bol.consignment_id }, transaction });
+                await consignment.update({ status: previousStatus }, { user, transaction });
+            } else if (bol.anonymous_id) {
+                const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
+                await anonymous.update({ status: previousStatus }, { user, transaction });
+            }
+
+        } else {
+            return await deleteBOLService(bol_code, transaction);
+        }
+
+        await transaction.commit();
+        return {
+            ...responseCodes.UPDATE_SUCCESS,
+            bol,
+        };
     } catch (error) {
+        await transaction.rollback();
         console.log(error);
         return responseCodes.SERVER_ERROR;
     }
@@ -231,4 +404,5 @@ module.exports = {
     updateBOLService,
     assignCustomerService,
     deleteBOLService,
+    undoBOLService,
 }

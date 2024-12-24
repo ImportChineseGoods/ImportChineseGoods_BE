@@ -1,4 +1,4 @@
-const { createBOLService, getBOLsByStatusService, updateBOLService, assignCustomerService, deleteBOLService } = require("../services/bolService");
+const { createBOLService, searchBOLService, undoBOLService, getBOLsByStatusService, updateBOLService, assignCustomerService, deleteBOLService } = require("../services/bolService");
 const responseCodes = require('../untils/response_types');
 
 const createBOL = async (req, res) => {
@@ -25,15 +25,8 @@ const searchBOL = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
 
-    const result = await searchBOLService(req.query.keyword, page, pageSize);
-    return res.status(result.status).json({
-        data: result.rows,
-        pagination: {
-            total: result.count || 0,
-            current: page,
-            pageSize: pageSize,
-        },
-    });
+    const result = await searchBOLService(req.query.query, page, pageSize);
+    return res.status(result.status).json(result);
 }
 
 const updateBOL = async (req, res) => {
@@ -56,6 +49,11 @@ const deleteBOL = async (req, res) => {
     return res.status(result.status).json(result);
 }
 
+const undoBOL = async (req, res) => {
+    const result = await undoBOLService(req.user, req.params.bol_code);
+    return res.status(result.status).json(result);
+}
+
 module.exports = {
     createBOL,
     getBOLsByStatus,
@@ -63,4 +61,5 @@ module.exports = {
     updateBOL,
     assignCustomer,
     deleteBOL,
+    undoBOL
 }
