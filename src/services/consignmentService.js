@@ -12,56 +12,57 @@ const responseCodes = require('../untils/response_types');
 const { refundTransactionService } = require('./transactionService');
 const { Sequelize, Op } = require('sequelize');
 
-const createConsignmentService = async (customerId, data, dbTransaction) => {
-    const transaction = dbTransaction || await sequelize.transaction();
+const createConsignmentService = async (customerId, data, transaction) => {
+    const managedTransaction = transaction || await sequelize.transaction();
+    let isManagedTransaction = !transaction;
     try {
         const lastConsignment = await Consignment.findOne({
             order: [['id', 'DESC']],
             attributes: ['id'],
             limit: 1,
-        }, { transaction });
-        const bol = await BOL.findOne({ where: { bol_code: data.bol_code } });
+        }, { transaction: managedTransaction });
+
+
+        const bol = await BOL.findOne({ where: { bol_code: data.bol_code } }, { managedTransaction });
         if (bol) return responseCodes.BOL_EXISTS;
 
         let newConsignmentId = 'KG0001';
         if (lastConsignment) {
             const lastNumber = parseInt(lastConsignment.id.replace('KG', ''), 10);
-
-            if (lastNumber < 9999) {
-                newConsignmentId = `KG${String(lastNumber + 1).padStart(4, '0')}`;
-            } else {
-                newConsignmentId = `KG${lastNumber + 1}`;
-            }
+            newConsignmentId = `KG${String(lastNumber + 1).padStart(4, '0')}`;
         }
-        const result = await Consignment.create(
-            {
-                id: newConsignmentId,
-                customer_id: customerId,
-                warehouse_id: data.warehouse_id,
-                status: data?.status || 'shop_shipping',
-                note: data?.note,
-            },
-            { transaction }
-        );
 
-        const bolData = {
+        const result = await Consignment.create({
+            id: newConsignmentId,
+            customer_id: customerId,
+            warehouse_id: data.warehouse_id,
+            status: data?.status || 'shop_shipping',
+            note: data?.note,
+            weight: data?.weight,
+        }, { transaction: managedTransaction });
+
+        await BOL.create({
             consignment_id: result.id,
             bol_code: data.bol_code,
-            status: 'shop_shipping'
-        }
-        await BOL.create(bolData, { transaction });
+            status: data?.status || 'shop_shipping'
+        }, { transaction: managedTransaction });
 
-        await transaction.commit();
+        if (isManagedTransaction) {
+            await managedTransaction.commit();
+        }
         return {
             ...responseCodes.CREATE_ORDER_SUCCESS,
             consignment: result,
         };
     } catch (error) {
-        await transaction.rollback();
+        if (isManagedTransaction && managedTransaction.rollback) {
+            await managedTransaction.rollback();
+        }
         console.error(error);
         return responseCodes.SERVER_ERROR;
     }
 };
+
 
 const getAllConsignmentService = async (page, pageSize) => {
     try {

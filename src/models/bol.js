@@ -50,7 +50,7 @@ module.exports = (sequelize) => {
                 model: 'anonymous_consignments',
                 key: 'id'
             },
-            onDelete: 'CASCADE',
+            onDelete: 'SET NULL',
         },
         status: {
             type: DataTypes.ENUM(

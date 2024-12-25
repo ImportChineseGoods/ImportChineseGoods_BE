@@ -9,7 +9,7 @@ router.all("*", checkRole('exclude', ['customer']))
 router.post("/new", createBOL);
 router.get("/get/:status", getBOLsByStatus);
 router.get("/search", searchBOL)
-router.patch("/assign/:customer_id", assignCustomer);
+router.post("/assign/:customer_id", assignCustomer);
 router.patch("/:bol_code", updateBOL);
 router.delete("/:bol_code", undoBOL);
 

@@ -93,7 +93,7 @@ module.exports = (sequelize) => {
                 key: 'id'
             },
             allowNull: true,
-            onDelete: 'CASCADE',
+            onDelete: 'SET NULL',
         },
         status: {
             type: DataTypes.ENUM(

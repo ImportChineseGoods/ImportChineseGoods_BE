@@ -24,8 +24,8 @@ const getBOLsByStatus = async (req, res) => {
 const searchBOL = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 50;
-
-    const result = await searchBOLService(req.query.query, page, pageSize);
+    console.log('req.query:', req.query, page,  pageSize)
+    const result = await searchBOLService(req.query, page, pageSize);
     return res.status(result.status).json(result);
 }
 

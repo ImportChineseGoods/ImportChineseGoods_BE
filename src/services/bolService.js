@@ -46,6 +46,14 @@ const updateBOLService = async (user, bol_code, data) => {
             return await createBOLService(data, transaction);
         }
 
+        if (data.status === 'china_warehouse_received' && bol.status !== 'shop_shipping' ||
+            data.status === 'vietnam_warehouse_received' && bol.status !== 'china_warehouse_received' ||
+            data.status === 'waiting_export' && bol.status !== 'vietnam_warehouse_received' ||
+            data.status === 'exported' && bol.status !== 'waiting_export') {
+            await transaction.rollback();
+            return responseCodes.STATUS_ORDER_INCORRECT;
+        }
+
         if (bol.status === data.status) {
             await transaction.rollback();
             return responseCodes.BOL_IMPORTED;
@@ -97,33 +105,56 @@ const updateBOLService = async (user, bol_code, data) => {
 const assignCustomerService = async (user, customerId, data) => {
     const transaction = await sequelize.transaction();
     try {
-        const customer = await Customer.findOne({ where: { id: customerId }, transaction })
+        const customer = await Customer.findOne({ where: { id: customerId }, transaction });
 
         if (!customer) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
+        const lastConsignment = await Consignment.findOne({
+            order: [['id', 'DESC']],
+            attributes: ['id'],
+            limit: 1,
+        }, { transaction });
+
+        let newConsignmentId = 'KG0001';
+
+        if (lastConsignment) {
+            const lastNumber = parseInt(lastConsignment.id.replace('KG', ''), 10);
+            newConsignmentId = `KG${String(lastNumber + 1).padStart(4, '0')}`;
+        }
+
         for (const bol of data.bols) {
-            const consignment = await createConsignmentService(customerId, {
-                status: bol.status,
-                weight: bol.weight,
+            const lastNumber = parseInt(newConsignmentId.replace('KG', ''), 10);
+            newConsignmentId = `KG${String(lastNumber + 1).padStart(4, '0')}`;
+
+            const consignment = await Consignment.create({
+                id: newConsignmentId,
+                customer_id: customerId,
+                warehouse_id: 1,
+                status: bol?.status,
+                weight: bol?.weight,
+                note: `Gán khách hàng ${customer.name} cho vận đơn ${bol.bol_code}`,
             }, { transaction, user });
-            const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
-            const histories = await History.findAll({ where: { anonymous_id: anonymous.id } })
-            for (const history of histories) {
-                await history.update({
-                    consignment_id: consignment.id,
-                    anonymous_id: null
-                }, { transaction });
-            }
-            await anonymous.destroy({ transaction });
+
             await BOL.update(
-                {
-                    consignment_id: consignment.id,
-                    anonymous_id: null
-                },
+                { consignment_id: consignment.id },
                 { where: { bol_code: bol.bol_code }, transaction }
             );
+
+            if (bol.anonymous_id) {
+                const histories = await History.findAll({ where: { anonymous_id: bol.anonymous.id }, transaction });
+                for (const history of histories) {
+                    await history.update({
+                        consignment_id: consignment.id,
+                        anonymous_id: null
+                    }, { transaction });
+                }
+                const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
+                if (anonymous) {
+                    await anonymous.destroy({ transaction });
+                }
+            }
         }
         await transaction.commit();
         return responseCodes.UPDATE_SUCCESS;
@@ -190,6 +221,11 @@ const searchBOLService = async (query, page, pageSize) => {
     try {
         const conditions = {};
         const customerConditions = {};
+        console.log(query);
+
+        if (query?.status) {
+            conditions.status = query.status;
+        }
 
         if (query?.search) {
             conditions[Op.or] = [
@@ -212,7 +248,14 @@ const searchBOLService = async (query, page, pageSize) => {
         }
 
         if (query?.customer) {
-            customerConditions.customer_id = query.customer;
+
+            if (query.customer !== 'anonymous') {
+                customerConditions.id = query.customer;
+                conditions.anonymous_id = null;
+            } else {
+                conditions.order_id = null;
+                conditions.consignment_id = null;
+            }
         }
 
         const bols = await BOL.findAndCountAll({
@@ -224,34 +267,36 @@ const searchBOLService = async (query, page, pageSize) => {
                 {
                     model: Order,
                     as: 'order',
-                    attributes: ['id'],
+                    attributes: ['id', 'customer_id'],
                     include: [
                         {
                             model: Customer,
                             as: 'customer',
                             attributes: ['id', 'name'],
                             where: customerConditions,
-                            required: query?.customer ? true : false
+                            required: true
                         }
                     ]
                 },
                 {
                     model: Consignment,
                     as: 'consignment',
-                    attributes: ['id'],
+                    attributes: ['id', 'customer_id'],
                     include: [
                         {
                             model: Customer,
                             as: 'customer',
                             attributes: ['id', 'name'],
                             where: customerConditions,
-                            required: query?.customer ? true : false
+                            required:  true
                         }
                     ]
                 },
                 { model: AnonymousConsignment, as: 'anonymous' },
             ],
         });
+
+        console.log(conditions)
 
         return {
             ...responseCodes.GET_DATA_SUCCESS,
@@ -292,6 +337,7 @@ const deleteBOLService = async (id, transaction) => {
 
         console.log(bol.anonymous.histories.length);
         if (bol.anonymous_id && bol.anonymous.histories.length < 2) {
+            await bol.destroy();
             await anonymous.destroy();
             await transaction.commit();
             return responseCodes.DELETE_BOL_SUCCESS;
@@ -321,7 +367,6 @@ const undoBOLService = async (user, bol_code) => {
                         {
                             model: History,
                             as: 'histories',
-                            order: [['create_at', 'DESC']]
                         }
                     ]
                 },
@@ -333,7 +378,6 @@ const undoBOLService = async (user, bol_code) => {
                         {
                             model: History,
                             as: 'histories',
-                            order: [['create_at', 'DESC']]
                         }
                     ]
                 },
@@ -345,7 +389,6 @@ const undoBOLService = async (user, bol_code) => {
                         {
                             model: History,
                             as: 'histories',
-                            order: [['create_at', 'DESC']]
                         }
                     ]
                 },
@@ -360,11 +403,14 @@ const undoBOLService = async (user, bol_code) => {
         let previousStatus = null;
 
         if (bol.order && bol.order.histories.length > 1) {
-            previousStatus = bol.order.histories[1].status;
+            const sortedHistories = [...bol.order.histories].reverse();
+            previousStatus = sortedHistories[1]?.status;
         } else if (bol.consignment && bol.consignment.histories.length > 1) {
-            previousStatus = bol.consignment.histories[1].status;
+            const sortedHistories = [...bol.consignment.histories].reverse();
+            previousStatus = sortedHistories[1]?.status;
         } else if (bol.anonymous && bol.anonymous.histories.length > 1) {
-            previousStatus = bol.anonymous.histories[1].status;
+            const sortedHistories = [...bol.anonymous.histories].reverse();
+            previousStatus = sortedHistories[1]?.status;
         }
 
         if (previousStatus) {

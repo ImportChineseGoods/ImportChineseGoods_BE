@@ -239,5 +239,10 @@ module.exports = {
         status: 400,
         RC: '0047',
         RM: "Đơn hàng đã được nhập kho"
+    },
+    STATUS_ORDER_INCORRECT: {
+        status: 400,
+        RC: '0048',
+        RM: "Trạng thái đơn hàng không chính xác"
     }
 };
