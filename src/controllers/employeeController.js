@@ -38,7 +38,7 @@ const getAllEmployee = async (req, res) => {
 };
 
 const getEmployeeById = async (req, res) => {
-    const result = await getEmployeeByIdService(req.params.id);
+    const result = await getEmployeeByIdService(req.params.id, req.user);
     return res.status(result.status).json(result);
 }
 

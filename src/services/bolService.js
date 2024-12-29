@@ -9,7 +9,6 @@ const Order = sequelize.models.Order;
 const Customer = sequelize.models.Customer;
 const History = sequelize.models.History;
 const responseCodes = require('../untils/response_types');
-const { createConsignmentService } = require('./consignmentService');
 
 const createBOLService = async (data, dbTransation) => {
     const transaction = dbTransation || await sequelize.transaction();
@@ -133,7 +132,7 @@ const assignCustomerService = async (user, customerId, data) => {
                 customer_id: customerId,
                 warehouse_id: 1,
                 status: bol?.status,
-                weight: bol?.weight,
+                weight: bol?.weight || 0,
                 note: `Gán khách hàng ${customer.name} cho vận đơn ${bol.bol_code}`,
             }, { transaction, user });
 
@@ -219,94 +218,95 @@ const getBOLsByStatusService = async (status, page, pageSize) => {
 
 const searchBOLService = async (query, page, pageSize) => {
     try {
-        const conditions = {};
-        const customerConditions = {};
-        console.log(query);
+        const offset = (page - 1) * pageSize;
+        const limit = pageSize;
 
-        if (query?.status) {
-            conditions.status = query.status;
-        }
+        const include = [
+            { model: Order, as: 'order', attributes: ['id', 'customer_id'], include: [{ model: History, as: 'histories' }] },
+            { model: Consignment, as: 'consignment', attributes: ['id', 'customer_id'], include: [{ model: History, as: 'histories' }] },
+            { model: AnonymousConsignment, as: 'anonymous', attributes: ['id'], include: [{ model: History, as: 'histories' }] }
+        ];
 
-        if (query?.search) {
-            conditions[Op.or] = [
-                { consignment_id: { [Op.like]: `%${query.search}%` } },
-                { id: { [Op.like]: `%${query.search}%` } },
-                { anonymous_id: { [Op.like]: `%${query.search}%` } },
-                { order_id: { [Op.like]: `%${query.search}%` } },
-            ];
-        }
+        let bols = {};
 
-        if (query?.dateRange) {
-            const fromDate = new Date(query.dateRange[0]);
-            const toDate = new Date(query.dateRange[1]);
+        if (query?.customer && query.customer !== 'anonymous') {
+            const conditions = [];
+            const fromDate = new Date(query.dateRange[0]).toISOString();
+            const toDate = new Date(query.dateRange[1]).toISOString();
 
-            if (!isNaN(fromDate) && !isNaN(toDate)) {
-                conditions.update_at = {
-                    [Op.between]: [fromDate, toDate]
-                };
+            conditions.push(`b.update_at BETWEEN '${fromDate}' AND '${toDate}'`);
+            conditions.push(`(c.customer_id = '${query.customer}' OR o.customer_id = '${query.customer}')`);
+
+            if (query?.status) {
+                conditions.push(`b.status = '${query.status}'`);
             }
-        }
 
-        if (query?.customer) {
-
-            if (query.customer !== 'anonymous') {
-                customerConditions.id = query.customer;
-                conditions.anonymous_id = null;
-            } else {
-                conditions.order_id = null;
-                conditions.consignment_id = null;
+            if (query?.search) {
+                conditions.push(`(b.bol_code LIKE '%${query.search}%' OR o.order_id LIKE '%${query.search}%' OR c.consignment_id LIKE '%${query.search}%' OR b.anonymous_id LIKE '%${query.search}%')`);
             }
-        }
 
-        const bols = await BOL.findAndCountAll({
-            where: conditions,
-            order: [['update_at', 'DESC']],
-            offset: (page - 1) * pageSize,
-            limit: pageSize,
-            include: [
-                {
-                    model: Order,
-                    as: 'order',
-                    attributes: ['id', 'customer_id'],
-                    include: [
-                        {
-                            model: Customer,
-                            as: 'customer',
-                            attributes: ['id', 'name'],
-                            where: customerConditions,
-                            required: true
-                        }
+            const sql = `
+                SELECT b.bol_code, b.update_at
+                FROM bols b
+                LEFT JOIN orders o ON b.order_id = o.id
+                LEFT JOIN consignments c ON b.consignment_id = c.id
+                WHERE ${conditions.join(' AND ')}
+                GROUP BY b.bol_code
+                ORDER BY b.update_at DESC
+                LIMIT ${limit} OFFSET ${offset};
+            `;
+            const [bolList] = await sequelize.query(sql);
+            const ans = []
+            for (const bol of bolList) {
+                const result = await BOL.findOne({
+                    where: { bol_code: bol.bol_code },
+                    include,
+                    order: [['update_at', 'DESC']]
+                });
+                ans.push(result);
+            }
+
+            bols = {
+                count: ans.length,
+                rows: ans
+            };
+        } else {
+            const conditions = {
+                update_at: { [Op.between]: [new Date(query.dateRange[0]), new Date(query.dateRange[1])] },
+                ...query?.status && { status: query.status },
+                ...query?.search && {
+                    [Op.or]: [
+                        { consignment_id: { [Op.like]: `%${query.search}%` } },
+                        { id: { [Op.like]: `%${query.search}%` } },
+                        { anonymous_id: { [Op.like]: `%${query.search}%` } },
+                        { order_id: { [Op.like]: `%${query.search}%` } }
                     ]
                 },
-                {
-                    model: Consignment,
-                    as: 'consignment',
-                    attributes: ['id', 'customer_id'],
-                    include: [
-                        {
-                            model: Customer,
-                            as: 'customer',
-                            attributes: ['id', 'name'],
-                            where: customerConditions,
-                            required:  true
-                        }
-                    ]
-                },
-                { model: AnonymousConsignment, as: 'anonymous' },
-            ],
-        });
+                ...query?.customer && { anonymous_id: { [Op.not]: null } },
+            };
 
-        console.log(conditions)
+            bols = await BOL.findAndCountAll({
+                where: conditions,
+                include,
+                distinct: true,
+                order: [['update_at', 'DESC']],
+                offset,
+                limit
+            });
+        }
 
-        return {
+        return { 
             ...responseCodes.GET_DATA_SUCCESS,
             bols
         };
+
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return responseCodes.SERVER_ERROR;
     }
-}
+};
+
+
 
 const deleteBOLService = async (id, transaction) => {
     try {

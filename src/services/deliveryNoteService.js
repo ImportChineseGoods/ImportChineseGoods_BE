@@ -5,6 +5,12 @@ const DeliveryNote = sequelize.models.DeliveryNote;
 const Consignment = sequelize.models.Consignment;
 const Order = sequelize.models.Order;
 const Customer = sequelize.models.Customer;
+const History = sequelize.models.History;
+const Employee = sequelize.models.Employee;
+const BOL = sequelize.models.BOL;
+
+const { Op } = require('sequelize');
+
 const responseCodes = require('../untils/response_types');
 const { paymentTransactionService } = require('./transactionService');
 
@@ -13,34 +19,41 @@ const createDeliveryNoteService = async (user, data) => {
     try {
         const orders = data.orders;
 
-        if (!orders || orders.length === 0) {
+        if (!Array.isArray(orders) || orders.length === 0) {
             await transaction.rollback();
             return responseCodes.INVALID;
         }
 
-        const totalWeight = orders.reduce((sum, order) => sum + (order.weight || 0), 0);
-        const totalAmount = orders.reduce((sum, order) => sum + (order.total_amount || 0), 0) + data?.incurred_fee;  
-        const amountPaid = orders.reduce((sum, order) => sum + (order.amount_paid || 0), 0);
-
         const deliveryNote = await DeliveryNote.create(
             {
-                customer_id: data.customer_id,
-                commodity_money: totalAmount,
-                total_weight: totalWeight,
-                total_amount: totalAmount,
-                amount_paid: amountPaid,
-                outstanding_amount: totalAmount - amountPaid,
-                number_of_order: orders.length,
-                status: 'not exported',
+                customer_id: data.customer,
+                incurred_fee: data.incurred_fee,
+                number_of_order: data.number,
+                status: 'waiting_export',
                 type: data.type,
                 note: data?.note,
             },
             { transaction, user }
         );
 
+        let total_weight = 0;
+        let total_amount = 0;
+        let amount_paid = 0;
+        let outstanding_amount = 0;
+
         if (data.type === 'consignment') {
             for (const order of orders) {
-                const consignment = await Consignment.findOne({ where: { id: order.id }, transaction });
+                if (!order) {
+                    console.log('Invalid order:', order);
+                    continue;
+                }
+
+                const consignment = await Consignment.findOne({
+                    where: { id: order.id },
+                    lock: transaction.LOCK.SHARE,
+                    transaction
+                });
+
                 if (consignment) {
                     await consignment.update(
                         {
@@ -49,11 +62,29 @@ const createDeliveryNoteService = async (user, data) => {
                         },
                         { transaction, user }
                     );
+                } else {
+                    await transaction.rollback();
+                    return responseCodes.INVALID;
                 }
+
+                total_weight += consignment.weight;
+                total_amount += consignment.total_amount;
+                amount_paid += consignment.amount_paid;
+                outstanding_amount += consignment.outstanding_amount;
             }
         } else if (data.type === 'order') {
             for (const order of orders) {
-                const existingOrder = await Order.findOne({ where: { id: order.id }, transaction });
+                if (!order) {
+                    console.log('Invalid order:', order);
+                    continue;
+                }
+
+                const existingOrder = await Order.findOne({
+                    where: { id: order.id },
+                    lock: transaction.LOCK.SHARE,
+                    transaction
+                });
+
                 if (existingOrder) {
                     await existingOrder.update(
                         {
@@ -62,10 +93,30 @@ const createDeliveryNoteService = async (user, data) => {
                         },
                         { transaction, user }
                     );
+                } else {
+                    await transaction.rollback();
+                    return responseCodes.INVALID;
                 }
+
+                total_weight += existingOrder.weight;
+                total_amount += existingOrder.total_amount;
+                amount_paid += existingOrder.amount_paid;
+                outstanding_amount += existingOrder.outstanding_amount;
             }
         }
-        
+
+        console.log(total_weight, total_amount, amount_paid, outstanding_amount);
+
+        await deliveryNote.update(
+            {
+                total_weight,
+                total_amount: total_amount + data.incurred_fee,
+                amount_paid,
+                outstanding_amount: total_amount + data.incurred_fee - amount_paid,
+            },
+            { transaction, user }
+        );
+
         await transaction.commit();
         return {
             ...responseCodes.CREATE_DELIVERY_SUCCESS,
@@ -98,7 +149,37 @@ const getAllDeliveryNoteService = async (page, pageSize) => {
 
 const getDeliveryNoteByIdService = async (id) => {
     try {
-        const deliveryNote = await DeliveryNote.findOne({ where: { id } });
+        const deliveryNote = await DeliveryNote.findOne({ 
+            where: { id },
+            include: [
+                {
+                    model: Customer,
+                    as: 'customer',
+                    attributes: ['name', 'id', 'phone', 'address']
+                },
+                {
+                    model: Order,
+                    as: 'orders',
+                    attributes: ['id', 'total_amount', 'amount_paid', 'outstanding_amount', 'weight'],
+                    include: [
+                        { model: BOL, as: 'bol', attributes: ['bol_code'] }
+                    ]
+                },
+                {
+                    model: Consignment,
+                    as: 'consignments',
+                    attributes: ['id', 'total_amount', 'amount_paid', 'outstanding_amount', 'weight'],
+                    include: [
+                        { model: BOL, as: 'bol', attributes: ['bol_code'] }
+                    ]
+                },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [{ model: Employee, as: 'employee', attributes: ['name'] }]
+                }
+            ]
+        });
         if (!deliveryNote) {
             return responseCodes.NOT_FOUND;
         }
@@ -117,38 +198,49 @@ const queryDeliveryNoteService = async (query, page, pageSize) => {
     try {
         const conditions = {};
 
-        if (query.status && query.status.length > 0) {
-            conditions.status = {
-                [sequelize.Op.in]: query.status
-            };
+        console.log('Query:', query);
+
+        if (query?.status && query.status !== 'all') {
+            conditions.status = query.status;
         }
 
         if (query.search) {
-            conditions[sequelize.Op.or] = [
-                { customer_id: { [sequelize.Op.like]: `%${query.search}%` } },
-                { id: { [sequelize.Op.like]: `%${query.search}%` } }
+            conditions[Op.or] = [
+                { customer_id: { [Op.like]: `%${query.search}%` } },
+                { id: { [Op.like]: `%${query.search}%` } }
             ];
         }
 
-        if (query.fromDate && query.toDate) {
-            conditions.update_at = {
-                [sequelize.Op.between]: [query.fromDate, query.toDate]
-            };
-        } else if (query.fromDate) {
-            conditions.update_at = {
-                [sequelize.Op.gte]: query.fromDate
-            };
-        } else if (query.toDate) {
-            conditions.update_at = {
-                [sequelize.Op.lte]: query.toDate
-            };
+        if (query?.dateRange) {
+            const fromDate = new Date(query.dateRange[0]);
+            const toDate = new Date(query.dateRange[1]);
+
+            if (!isNaN(fromDate) && !isNaN(toDate)) {
+                conditions.update_at = {
+                    [Op.between]: [fromDate, toDate]
+                };
+            }
         }
 
         const deliveryNotes = await DeliveryNote.findAndCountAll({
             where: conditions,
             deliveryNote: [['update_at', 'DESC']],
             limit: pageSize,
-            offset: (page - 1) * pageSize
+            offset: (page - 1) * pageSize,
+            order: [['update_at', 'DESC']], 
+            distinct: true,
+            include: [
+                {
+                    model: Customer,
+                    as: 'customer',
+                    attributes: ['name', 'id']
+                },
+                {
+                    model: History,
+                    as: 'histories',
+                    include: [{ model: Employee, as: 'employee', attributes: ['name'] }]
+                }
+            ],
         });
 
         return {
@@ -185,8 +277,8 @@ const cancelDeliveryNoteService = async (user, id) => {
         const deliveryNote = await DeliveryNote.findOne({
             where: { id },
             include: [
-                { model: Order, as: 'orders' },
-                { model: Consignment, as: 'consignments' },
+                { model: Order, as: 'orders', attributes: ['id', 'total_amount', 'amount_paid', 'outstanding_amount', 'weight'] },   
+                { model: Consignment, as: 'consignments', attributes: ['id', 'total_amount', 'amount_paid', 'outstanding_amount', 'weight'] },
             ],
             transaction,
         });
@@ -195,9 +287,7 @@ const cancelDeliveryNoteService = async (user, id) => {
             await transaction.rollback();
             return responseCodes.NOT_FOUND;
         }
-
-        const status = ['exported', 'cancelled'];
-        if (status.includes(deliveryNote.status)) {
+        if (deliveryNote.status !== 'waiting_export') {
             await transaction.rollback();
             return responseCodes.UNPROFITABLE;
         }
@@ -209,7 +299,7 @@ const cancelDeliveryNoteService = async (user, id) => {
                 await order.update(
                     {
                         delivery_id: null,
-                        status: 'waiting_export',
+                        status: 'vietnam_warehouse_received', 
                     },
                     { transaction, user }
                 );
@@ -221,7 +311,7 @@ const cancelDeliveryNoteService = async (user, id) => {
                 await consignment.update(
                     {
                         delivery_id: null,
-                        status: 'waiting_export',
+                        status: 'vietnam_warehouse_received', 
                     },
                     { transaction, user }
                 );
@@ -232,7 +322,6 @@ const cancelDeliveryNoteService = async (user, id) => {
         return {
             ...responseCodes.UPDATE_SUCCESS,
             deliveryNote,
-            history,
         };
     } catch (error) {
         await transaction.rollback();
@@ -258,7 +347,7 @@ const exportDeliveryNoteService = async (user, id) => {
             return responseCodes.NOT_FOUND;
         }
 
-        if (deliveryNote.status !== 'not exported') {
+        if (deliveryNote.status !== 'waiting_export') {
             await transaction.rollback();
             return responseCodes.DELIVERY_EXPORTED;
         }
@@ -269,13 +358,12 @@ const exportDeliveryNoteService = async (user, id) => {
                     customer_id: order.customer_id,
                     value: order.outstanding_amount,
                     type: 'payment',
-                    content: 'Thanh toán cho đơn hàng ' + order.id,
+                    content: 'Thanh toán đơn hàng ' + order.id,
                     employee_id: user.id,
                 }
                 await paymentTransactionService(paymentData, transaction);
                 await order.update(
                     {
-                        delivery_id: null,
                         status: 'exported',
                         amount_paid: order.total_amount,
                     },
@@ -290,13 +378,12 @@ const exportDeliveryNoteService = async (user, id) => {
                     customer_id: consignment.customer_id,
                     value: consignment.outstanding_amount,
                     type: 'payment',
-                    content: 'Thanh toán cho đơn ký gửi ' + consignment.id,
+                    content: 'Thanh toán đơn ký gửi ' + consignment.id,
                     employee_id: user.id,
                 }
                 await paymentTransactionService(paymentData, transaction);
                 await consignment.update(
                     {
-                        delivery_id: null,
                         status: 'exported',
                         amount_paid: consignment.total_amount,
                     },
@@ -317,16 +404,24 @@ const exportDeliveryNoteService = async (user, id) => {
         }
 
         await deliveryNote.update({ status: 'exported', amount_paid: deliveryNote.total_amount }, { transaction, user });
-        await customer.update({accumulation: customer.accumulation + deliveryNote.total_amount}, {transaction, user});
+        const customer = await Customer.findOne({ where: { id: deliveryNote.customer_id }, transaction });
+
+        if (customer) {
+            await customer.update(
+                { 
+                    accumulation: customer.accumulation + deliveryNote.total_amount 
+                },
+                { transaction, user }
+            );
+        }
 
         await transaction.commit();
         return {
             ...responseCodes.UPDATE_SUCCESS,
             deliveryNote,
-            history,
         };
     } catch (error) {
-        await transaction.rollback();
+
         console.error(error);
         return responseCodes.SERVER_ERROR;
     }

@@ -43,13 +43,10 @@ module.exports = (sequelize) => {
             type: DataTypes.DECIMAL(10, 2),
             allowNull: true
         },
-        total_shipping_fee: {
-            type: DataTypes.DECIMAL(10, 2),
-            allowNull: true
-        },
         incurred_fee: {
             type: DataTypes.DECIMAL(10, 2),
-            allowNull: true
+            allowNull: true,
+            defaultValue: 0
         },
         total_amount: {
             type: DataTypes.DECIMAL(10, 2),
@@ -65,7 +62,7 @@ module.exports = (sequelize) => {
         },
         status: {
             type: DataTypes.ENUM(
-                'not exported',
+                'waiting_export',
                 'exported',
                 'cancelled'
             ),
@@ -95,6 +92,7 @@ module.exports = (sequelize) => {
     DeliveryNote.afterCreate(async (deliveryNote, options) => {
         const History = sequelize.models.History;
         const Customer = sequelize.models.Customer;
+
         await History.create({
             delivery_id: deliveryNote.id,
             status: deliveryNote.status,
@@ -104,19 +102,22 @@ module.exports = (sequelize) => {
         if (deliveryNote.status === 'exported') {
             const customer = await Customer.findByPk(deliveryNote.customer_id);
             await customer.update({
-                accumulation: parseInt(customer.accumulation) + parseInt(deliveryNote.total_amount),
+                accumulation: Math.round(customer.accumulation) + Math.round(deliveryNote.total_amount),
             }, { transaction: options.transaction });
         }
     });
 
     DeliveryNote.beforeUpdate(async (deliveryNote, options) => {
-        order.outstanding_amount = order.total_amount - order.amount_paid;
+        const History = sequelize.models.History;
+        const Customer = sequelize.models.Customer;
+        
+        deliveryNote.outstanding_amount = deliveryNote.total_amount - deliveryNote.amount_paid;
         if (deliveryNote._previousDataValues.status !== deliveryNote.status) {
             const employeeId = options.user?.id || null;
     
             await History.create(
                 {
-                    order_id: deliveryNote.id,
+                    delivery_id: deliveryNote.id,
                     status: deliveryNote.status,
                     employee_id: employeeId,
                 },

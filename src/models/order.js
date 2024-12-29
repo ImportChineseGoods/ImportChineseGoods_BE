@@ -211,19 +211,20 @@ module.exports = (sequelize) => {
         order.purchase_discount = customer.purchase_discount || 0;
         order.shipping_discount = customer.shipping_discount || 0;
 
-        order.shipping_fee = order.weight * order.weight_fee || 0;
-        order.purchase_fee = Math.max(0.03 * order.commodity_money * order.applicable_rate, 10000);
+        order.shipping_fee = Math.round(parseInt(order.weight * order.weight_fee)) || 0;
+        order.purchase_fee = Math.max(Math.round(0.03 * order.commodity_money * order.applicable_rate), 10000);
 
-        order.total_amount =
-            order.shipping_fee * (1 - order.shipping_discount / 100) +
-            (order.incurred_fee || 0) +
-            (order.commodity_money * order.applicable_rate) +
-            (order.packing_fee || 0) +
-            (order.counting_fee || 0) +
-            (order.purchase_fee || 0) * (1 - order.purchase_discount / 100) +
-            (order.china_shipping_fee || 0) * order.applicable_rate;
+        order.total_amount = Math.round(
+            order.shipping_fee - Math.round(order.shipping_fee * order.shipping_discount / 100) +
+            Math.round(order.incurred_fee || 0) +
+            Math.round(order.commodity_money * order.applicable_rate) +
+            (Math.round(order.packing_fee) || 0) +
+            (Math.round(order.counting_fee) || 0) +
+            order.purchase_fee - Math.round(order.purchase_fee * order.purchase_discount / 100) +
+            Math.round((order.china_shipping_fee || 0) * order.applicable_rate)
+        );
 
-        order.outstanding_amount = order.total_amount - (order.amount_paid || 0);
+        order.outstanding_amount = Math.round(order.total_amount - (order.amount_paid || 0));
     });
 
     Order.afterCreate(async (order, options) => {
@@ -238,16 +239,21 @@ module.exports = (sequelize) => {
         const Customer = sequelize.models.Customer;
         const History = sequelize.models.History;
         const customer = await Customer.findOne({ where: { id: order.customer_id } });
-        order.shipping_fee = parseInt(order.weight * order.weight_fee);
-        order.total_amount = parseInt(
-            order.shipping_fee * (1 - order.shipping_discount / 100) +
-            order.incurred_fee +
-            order.commodity_money * order.applicable_rate +
-            order.packing_fee +
-            order.counting_fee +
-            order.purchase_fee * (1 - order.purchase_discount / 100) +
-            order.china_shipping_fee * order.applicable_rate);
-        order.outstanding_amount = parseInt(order.total_amount - order.amount_paid);
+        order.shipping_fee = Math.round(parseInt(order.weight * order.weight_fee)) || 0;
+        order.purchase_fee = Math.max(Math.round(0.03 * order.commodity_money * order.applicable_rate), 10000);
+
+        order.total_amount = Math.round(
+            order.shipping_fee - Math.round(order.shipping_fee * order.shipping_discount / 100) +
+            Math.round(order.incurred_fee || 0) +
+            Math.round(order.commodity_money * order.applicable_rate) +
+            (Math.round(order.packing_fee) || 0) +
+            (Math.round(order.counting_fee) || 0) +
+            order.purchase_fee - Math.round(order.purchase_fee * order.purchase_discount / 100) +
+            Math.round((order.china_shipping_fee || 0) * order.applicable_rate)
+        );
+
+        order.outstanding_amount = Math.round(order.total_amount - (order.amount_paid || 0));
+
 
         const deposit = parseInt(customer.deposit_rate / 100 * order.commodity_money * order.applicable_rate);
         const status = ['deposited', 'ordering'];

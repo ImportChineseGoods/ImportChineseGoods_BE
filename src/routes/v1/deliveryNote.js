@@ -19,7 +19,7 @@ router.post("/new", createDeliveryNote);
 router.get("/query", queryDeliveryNote);
 router.get("/:id", getDeliveryNoteById);
 router.patch("/cancel/:id", cancelDeliveryNote);
-router.patch("/export", exportDeliveryNote);
+router.patch("/export/:id", exportDeliveryNote);
 router.patch("/:id", updateDeliveryNote);
 
 module.exports = router; 

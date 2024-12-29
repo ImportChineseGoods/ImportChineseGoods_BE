@@ -45,6 +45,7 @@ module.exports = (sequelize) => {
         await History.create({
             anonymous_id: anonymous.id,
             status: anonymous.status,
+            employee_id: options.user?.id || null
         }, { transaction: options.transaction });
     });
 

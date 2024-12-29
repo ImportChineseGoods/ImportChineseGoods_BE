@@ -1,13 +1,13 @@
 require('dotenv').config();
 
 const sequelize = require('../config');
-const deliveryNote = require('../models/deliveryNote');
 const Order = sequelize.models.Order;
 const Consignment = sequelize.models.Consignment;
 const Complaint = sequelize.models.Complaint;
 const DeliveryNote = sequelize.models.DeliveryNote;
 const Customer = sequelize.models.Customer;
-const Parameter = sequelize.models.Parameter;
+const BOL = sequelize.models.BOL;
+const History = sequelize.models.History;
 const responseCodes = require('../untils/response_types');
 
 const { Op } = require('sequelize');
@@ -159,9 +159,68 @@ const getCustomerService = async (query) => {
     }
 };
 
+const getOrderByCustomerService = async ({customer, type, status}) => {
+    try {
+        let orders = [];
+
+        if (type === 'order') {
+            orders = await Order.findAndCountAll({
+                where: {
+                    customer_id: customer,
+                    status: status,
+                },
+                distinct: true,
+                attributes: ['id', 'total_amount', 'status', 'amount_paid', 'outstanding_amount', 'update_at', 'weight'],
+                include: [
+                    {
+                        model: BOL,
+                        as: 'bol',
+                        attributes: ['bol_code'],
+                    },
+                    {
+                        model: History,
+                        as: 'histories',
+                    }
+                ],
+                order: [['update_at', 'DESC']]
+            });
+        } else {
+            orders = await Consignment.findAndCountAll({
+                where: {
+                    customer_id: customer,
+                    status: status,
+                },
+                distinct: true,
+                attributes: ['id', 'total_amount', 'status', 'amount_paid', 'outstanding_amount', 'update_at', 'weight'],
+                include: [
+                    {
+                        model: BOL,
+                        as: 'bol',
+                        attributes: ['bol_code'],
+                    },
+                    {
+                        model: History,
+                        as: 'histories',
+                    }
+                ],
+                order: [['update_at', 'DESC']]
+            });
+        }
+
+        return {
+            ...responseCodes.GET_DATA_SUCCESS,
+            data: orders,
+        };
+    } catch (error) {
+        console.error(error);
+        return responseCodes.SERVER_ERROR;
+    }
+}
+
 
 module.exports = {
     getOverviewService,
     getAllCustomerService,
     getCustomerService,
+    getOrderByCustomerService
 }

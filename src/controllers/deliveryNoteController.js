@@ -11,7 +11,7 @@ const responseCodes = require('../untils/response_types');
 
 const createDeliveryNote = async (req, res) => {
     const types = ['consignment', 'order'];
-    if (!req.body.orders || req.body.orders.lenghth === 0 || !req.body.customer_id|| !types.includes(req.body.type)) {
+    if (!req.body.orders || req.body.orders.lenghth === 0 || !req.body.customer|| !types.includes(req.body.type)) {
         const result = responseCodes.INVALID;
         return res.status(result.status).json(result);
     }
@@ -56,7 +56,7 @@ const cancelDeliveryNote = async (req, res) => {
 }
 
 const exportDeliveryNote = async (req, res) => {
-    const result = await exportDeliveryNoteService(req.query);
+    const result = await exportDeliveryNoteService(req.user, req.params.id);
     return res.status(result.status).json(result);
 }
 

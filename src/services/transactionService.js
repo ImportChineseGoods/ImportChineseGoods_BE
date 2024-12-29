@@ -107,26 +107,22 @@ const depositTransactionService = async (user, data) => {
     }
 };
 
-const paymentTransactionService = async (data, dbTransaction) => {
+const paymentTransactionService = async (data, transaction) => {
     try {
-        const customer = await Customer.findOne({ where: { id: data.customer_id } }, { dbTransaction });
-        data.balance_after = parseInt(customer.balance, 10) - parseInt(data.value, 10); // Đảm bảo balance là số nguyên
+        const customer = await Customer.findOne({ where: { id: data.customer_id }, transaction });
+        data.balance_after = parseInt(customer.balance, 10) - parseInt(data.value, 10);
         data.type = 'payment';
         data.status = 'completed';
 
-        const result = await Transaction.create(data, { dbTransaction });
+        await Transaction.create(data, { transaction });
+        await customer.update({ balance: data.balance_after }, { transaction });
 
-        await dbTransaction.commit();
-        return {
-            ...responseCodes.CREATE_TRANSACTION_SUCCESS,
-            transaction: result,
-        };
+        return responseCodes.CREATE_TRANSACTION_SUCCESS;
     } catch (error) {
-        await dbTransaction.rollback();
-        console.log(error);
+        console.error(error);
         return responseCodes.SERVER_ERROR;
     }
-}
+};
 
 const refundTransactionService = async (data, dbTransaction) => {
     try {
@@ -262,6 +258,7 @@ const getAllTransactionsService = async (page, pageSize) => {
         const transactions = await Transaction.findAndCountAll({
             offset: (page - 1) * pageSize,
             limit: pageSize,
+            order: [['create_at', 'DESC']],
         });
 
         return {

@@ -55,7 +55,7 @@ const createCustomerService = async (data) => {
 
         return {
             ...responseCodes.REGISTER_SUCCESS,
-            customer: result,
+            customer: customers
         };
     } catch (error) {
         console.log(error);

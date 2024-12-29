@@ -151,9 +151,15 @@ const deleteEmployeeService = async (id) => {
     }
 };
 
-const getEmployeeByIdService = async (id) => {
+const getEmployeeByIdService = async (id, user) => {
     try {
-        const employee = await Employee.findOne({ where: { id }, attributes: { exclude: ['password'] } });
+        let employee
+        if (id === 'me') {
+            employee = await Employee.findOne({ where: { id: user.id }, attributes: { exclude: ['password'] } });
+        } else {
+            employee = await Employee.findOne({ where: { id }, attributes: { exclude: ['password'] } });  
+        }    
+        
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }

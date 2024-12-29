@@ -139,9 +139,14 @@ module.exports = (sequelize) => {
         const customer = await Customer.findOne({ where: { id: consignment.customer_id } });
         consignment.shipping_discount = customer.shipping_discount;
 
-        consignment.shipping_fee = consignment.weight * consignment.weight_fee;
-        consignment.total_amount = consignment.shipping_fee * (1 - consignment.shipping_discount / 100)  + consignment.incurred_fee;
-        consignment.outstanding_amount = consignment.total_amount - consignment.amount_paid;
+        consignment.shipping_fee = Math.round(consignment.weight * consignment.weight_fee);
+        consignment.total_amount = 
+            consignment.shipping_fee - Math.round(consignment.shipping_fee * consignment.shipping_discount / 100) +
+            (consignment.incurred_fee || 0)
+        consignment.outstanding_amount = Math.round(
+            consignment.total_amount - (consignment.amount_paid || 0)
+        );
+
     });
 
     Consignment.afterCreate(async (consignment, options) => {
@@ -153,9 +158,13 @@ module.exports = (sequelize) => {
     });
 
     Consignment.beforeUpdate(async (consignment, options) => {
-        consignment.shipping_fee = consignment.weight * consignment.weight_fee;
-        consignment.total_amount = consignment.shipping_fee * (1 - consignment.shipping_discount / 100)  + consignment.incurred_fee;
-        consignment.outstanding_amount = consignment.total_amount - consignment.amount_paid;
+        consignment.shipping_fee = Math.round(consignment.weight * consignment.weight_fee);
+        consignment.total_amount = 
+            consignment.shipping_fee - Math.round(consignment.shipping_fee * consignment.shipping_discount / 100) +
+            (consignment.incurred_fee || 0)
+        consignment.outstanding_amount = Math.round(
+            consignment.total_amount - (consignment.amount_paid || 0)
+        );
     });
 
     Consignment.afterUpdate(async (consignment, options) => {
@@ -169,7 +178,7 @@ module.exports = (sequelize) => {
                 consignment_id: consignment.id,
                 status: consignment.status,
                 employee_id: employeeId,
-            }, {transaction: options.transaction});
+            }, { transaction: options.transaction });
         }
 
         if (consignment.delivery_id && consignment._previousDataValues.outstanding_amount !== consignment.outstanding_amount) {
