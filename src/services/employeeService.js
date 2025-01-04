@@ -50,7 +50,7 @@ const createEmployeeService = async (data) => {
 const loginEmployeeService = async (data) => {
     try {
         // fetch user by username
-        const employee = await Employee.findOne({ where: { username: data.username } });
+        const employee = await Employee.findOne({ where: { username: data.username, is_active: true } });
         if (!employee) {
             return responseCodes.INVALID_EMPLOYEE;
         }
@@ -118,7 +118,7 @@ const updateEmployeeService = async (id, data) => {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
 
-        await employee.update(data);
+        await employee.update({ ...data });
         return {
             ...responseCodes.UPDATE_SUCCESS,
             employee
@@ -136,9 +136,7 @@ const deleteEmployeeService = async (id) => {
         if (!employee) {
             return responseCodes.ACCOUNT_NOT_FOUND;
         }
-        console.log(employee);
-        console.log(!employee.is_active);
-    
+
         await employee.update({
             is_active: !employee.is_active,
             where: { id }
@@ -247,14 +245,14 @@ const editInfoService = async (data) => {
 
         if (data.email && data.email !== employee.email) {
             const emailExists = await Employee.findOne({ where: { email: data.email } });
-            if (emailExists) {
+            if (emailExists && emailExists.id !== data.id) {
                 return responseCodes.EMAIL_EXISTS;
             }
         }
 
         if (data.phone && data.phone !== employee.phone) {
             const phoneExists = await Employee.findOne({ where: { phone: data.phone } });
-            if (phoneExists) {
+            if (phoneExists && phoneExists.id !== data.id) {
                 return responseCodes.PHONE_EXISTS;
             }
         }

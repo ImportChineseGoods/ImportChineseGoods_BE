@@ -173,7 +173,6 @@ module.exports = (sequelize) => {
 
         if (consignment._previousDataValues.status !== consignment.status) {
             const employeeId = options?.user.id || null;
-            console.log(consignment, employeeId)
             await History.create({
                 consignment_id: consignment.id,
                 status: consignment.status,

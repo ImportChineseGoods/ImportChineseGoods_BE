@@ -30,7 +30,6 @@ const depositTransaction = async (req, res) => {
         return res.status(result.status).json(result);
     }
     req.body.order_id = req.params.orderId;
-    console.log(req.user, req.body)
     const result = await depositTransactionService(req.user, req.body);
     return res.status(result.status).json(result);
 }

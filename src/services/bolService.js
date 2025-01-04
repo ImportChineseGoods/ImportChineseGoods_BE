@@ -335,7 +335,6 @@ const deleteBOLService = async (id, transaction) => {
 
         const anonymous = await AnonymousConsignment.findOne({ where: { id: bol.anonymous_id }, transaction });
 
-        console.log(bol.anonymous.histories.length);
         if (bol.anonymous_id && bol.anonymous.histories.length < 2) {
             await bol.destroy();
             await anonymous.destroy();

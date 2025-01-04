@@ -112,7 +112,6 @@ const updateProductInOrderService = async (user, productId, data) => {
         const newNumberOfProducts = productsInOrder.reduce((total, product) => total + product.quantity, 0);
 
         const purchaseFee = Math.max(newCommodityMoney * order.applicable_rate * 0.03, 10000);
-        console.log(newCommodityMoney, newNumberOfProducts, purchaseFee);
 
         await order.update({
             commodity_money: newCommodityMoney,

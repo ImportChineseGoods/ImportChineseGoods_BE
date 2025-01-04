@@ -63,6 +63,10 @@ const defaultRoutes = [
   {
     path: "/admin",
     route: require("./adminData.js")
+  },
+  {
+    path: "/statistics",
+    route: require("./statistics.js")
   }
 ]
 defaultRoutes.forEach((route) => {

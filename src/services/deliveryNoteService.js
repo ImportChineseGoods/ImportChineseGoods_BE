@@ -105,7 +105,6 @@ const createDeliveryNoteService = async (user, data) => {
             }
         }
 
-        console.log(total_weight, total_amount, amount_paid, outstanding_amount);
 
         await deliveryNote.update(
             {
@@ -197,8 +196,6 @@ const getDeliveryNoteByIdService = async (id) => {
 const queryDeliveryNoteService = async (query, page, pageSize) => {
     try {
         const conditions = {};
-
-        console.log('Query:', query);
 
         if (query?.status && query.status !== 'all') {
             conditions.status = query.status;
