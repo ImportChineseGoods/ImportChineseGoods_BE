@@ -7,7 +7,7 @@ const router = express.Router(); // /v1/api
 router.get("/", checkRole('include', ['admin', 'accountant']), getAllEmployee);
 router.post("/register", checkRole('include', ['admin']), createEmployee);
 router.post("/login", handleLogin);
-router.get("/search", checkRole('include', ['admin', 'accountant']), searchEmployee)
+router.get("/search", checkRole('exclude', ['customer']), searchEmployee)
 router.get("/:id", checkRole('exclude', ['customer']), getEmployeeById);
 router.patch("/edit-info", checkRole('exclude', ['customer']), editInfo);
 router.patch("/lock/:id", checkRole('include', ['admin', 'accountant']), deleteEmployee);
